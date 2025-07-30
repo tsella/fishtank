@@ -244,9 +244,9 @@ class FishConfig {
      */
     getSpawnConditions(fishType) {
         return {
-            feedingsRequired: 5, // Feed to full 5 times
-            minTankLife: fishType.feedIntervalMin * 2, // Minimum tank age in minutes
-            maxHunger: 10 // Must be well-fed
+            feedingsRequired: 5, // Feed any fish 5 times (not necessarily when full)
+            minTankLife: fishType.feedIntervalMin, // Minimum tank age in minutes (reduced)
+            maxHunger: 50 // More lenient hunger requirement
         };
     }
 
