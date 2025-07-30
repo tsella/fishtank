@@ -25,7 +25,8 @@ class FishConfig {
      * Format: name,feed_interval_min,hunger_threshold,rarity,cycle,size
      */
     loadFishTypes() {
-        const fishKeys = Object.keys(process.env).filter(key => key.startsWith('FISH_'));
+        // Filter for environment variables that match the FISH_# pattern
+        const fishKeys = Object.keys(process.env).filter(key => /^FISH_\d+$/.test(key));
         
         fishKeys.forEach(key => {
             try {

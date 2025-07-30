@@ -478,7 +478,8 @@ function createAquariumRoutes(db) {
                         saveInterval: 5000, // 5 seconds
                         hungerCheckInterval: 60000, // 1 minute
                         maxHunger: 100,
-                        hungerMultiplier: parseFloat(process.env.HUNGER_MULTIPLIER) || 1.0
+                        hungerMultiplier: parseFloat(process.env.HUNGER_MULTIPLIER) || 1.0,
+                        fishScaleMultiplier: parseFloat(process.env.FISH_SCALE_MULTIPLIER) || 1.5
                     }
                 }
             });

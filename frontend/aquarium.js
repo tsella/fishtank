@@ -1080,6 +1080,10 @@ class AquariumSystem {
             // Pass hunger multiplier to fish manager for fish instances
             this.fishManager.setHungerMultiplier(constants.hungerMultiplier);
         }
+
+        if (constants.fishScaleMultiplier && this.fishManager) {
+            this.fishManager.setFishScaleMultiplier(constants.fishScaleMultiplier);
+        }
     }
 
     /**

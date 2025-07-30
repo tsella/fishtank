@@ -5,7 +5,7 @@
  */
 
 class Fish {
-    constructor(data, fishType) {
+    constructor(data, fishType, scaleMultiplier = 1.5) {
         // Basic properties from server
         this.id = data.id;
         this.type = data.type;
@@ -17,7 +17,8 @@ class Fish {
         
         // Fish type configuration
         this.fishType = fishType;
-        this.size = fishType.size.width * 1.5; // 1.5x bigger for collision detection
+        this.scaleMultiplier = scaleMultiplier;
+        this.size = fishType.size.width * this.scaleMultiplier; // Use multiplier for collision
         this.width = fishType.size.width;
         this.height = fishType.size.height;
         this.feedIntervalMin = fishType.feedIntervalMin;
@@ -345,7 +346,7 @@ class Fish {
      */
     chooseNewTarget() {
         // Use dynamic bounds that account for fish size
-        const margin = Math.max(this.width, this.height) * 0.75;
+        const margin = Math.max(this.width, this.height) * 0.75 * this.scaleMultiplier;
         const minX = margin;
         const maxX = 1920 - margin;
         const minY = 200 + margin; // Below water surface
@@ -497,7 +498,7 @@ class Fish {
         if (this.isDying) return;
         
         // Add margin for fish size to prevent going offscreen
-        const margin = Math.max(this.width, this.height) * 0.75; // Account for 1.5x scale
+        const margin = Math.max(this.width, this.height) * 0.75 * this.scaleMultiplier;
         
         const minX = margin;
         const maxX = 1920 - margin;
@@ -546,9 +547,9 @@ class Fish {
         p5.translate(this.x, this.y);
         p5.scale(this.direction, 1); // Flip horizontally based on direction
         
-        // Apply breathing scale and make fish 1.5x bigger
+        // Apply breathing scale and make fish bigger
         const breathingScale = 1 + (this.breathingOffset * 0.02);
-        const fishScale = 1.5 * breathingScale; // 1.5x bigger fish
+        const fishScale = this.scaleMultiplier * breathingScale;
         p5.scale(fishScale);
         
         // Set opacity based on activity and death state
@@ -588,7 +589,7 @@ class Fish {
             // Draw hunger indicator if very hungry
             if (this.hunger > 70) {
                 p5.push();
-                p5.translate(this.x, this.y - this.height * 1.5);
+                p5.translate(this.x, this.y - this.height * this.scaleMultiplier);
                 this.drawHungerIndicator(p5);
                 p5.pop();
             }
@@ -737,7 +738,7 @@ class Fish {
         p5.push();
         
         // Position above fish
-        const barY = this.y - this.height * 1.2;
+        const barY = this.y - (this.height * this.scaleMultiplier * 0.8);
         const barWidth = this.width * 1.2;
         const barHeight = 6;
         const barX = this.x - barWidth / 2;
@@ -881,12 +882,26 @@ class FishManager {
         this.fish = [];
         this.fishTypes = new Map();
         this.hungerMultiplier = 1.0; // Default multiplier
+        this.fishScaleMultiplier = 1.5; // Default scale
         this.spawnPoints = [
             { x: 300, y: 400 },
             { x: 1620, y: 400 },
             { x: 960, y: 300 },
             { x: 960, y: 600 }
         ];
+    }
+
+    /**
+     * Set fish scale multiplier for all fish
+     * @param {number} multiplier - Fish scale multiplier
+     */
+    setFishScaleMultiplier(multiplier) {
+        this.fishScaleMultiplier = multiplier;
+        // Update existing fish
+        this.fish.forEach(fish => {
+            fish.scaleMultiplier = multiplier;
+            fish.size = fish.fishType.size.width * multiplier;
+        });
     }
 
     /**
@@ -923,7 +938,7 @@ class FishManager {
             return null;
         }
         
-        const fish = new Fish(fishData, fishType);
+        const fish = new Fish(fishData, fishType, this.fishScaleMultiplier);
         fish.hungerMultiplier = this.hungerMultiplier; // Apply current multiplier
         this.fish.push(fish);
         
