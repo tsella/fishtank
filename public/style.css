@@ -13,7 +13,7 @@
 html, body {
     height: 100%;
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 50%, #06b6d4 100%);
+    background: #000; /* Black background for canvas container */
     overflow: hidden;
     user-select: none;
     -webkit-user-select: none;
@@ -101,11 +101,22 @@ html, body {
 
 /* Game Container */
 #game-container {
-    position: relative;
+    position: absolute;
+    top: 0;
+    left: 0;
     width: 100vw;
     height: 100vh;
     overflow: hidden;
+    display: flex;
+    justify-content: center;
+    align-items: center;
 }
+
+/* Ensure canvas itself has no extra margin */
+canvas {
+    display: block;
+}
+
 
 /* UI Overlay */
 #ui-overlay {
