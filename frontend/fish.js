@@ -44,6 +44,7 @@ class Fish {
         this.targetFood = null;
         this.restTimer = 0;
         this.lastStateChange = Date.now();
+        this.hungerMultiplier = 1.0; // Will be set by fish manager
         
         // Visual properties
         this.color = this.getFishColor();
@@ -142,9 +143,9 @@ class Fish {
             return; // Fish is already at max hunger
         }
         
-        // Calculate hunger rate based on activity - much faster now
+        // Calculate hunger rate based on activity - now configurable
         const baseRate = this.hungerThreshold / (this.feedIntervalMin * 60); // per second
-        const hungerMultiplier = 3.0; // 3x faster hunger
+        const hungerMultiplier = this.hungerMultiplier || 1.0; // Use configured multiplier
         const activityMultiplier = this.isActive ? 1.0 : 0.5; // Less difference between day/night
         const hungerRate = baseRate * hungerMultiplier * activityMultiplier;
         
@@ -718,12 +719,25 @@ class FishManager {
     constructor() {
         this.fish = [];
         this.fishTypes = new Map();
+        this.hungerMultiplier = 1.0; // Default multiplier
         this.spawnPoints = [
             { x: 300, y: 400 },
             { x: 1620, y: 400 },
             { x: 960, y: 300 },
             { x: 960, y: 600 }
         ];
+    }
+
+    /**
+     * Set hunger multiplier for all fish
+     * @param {number} multiplier - Hunger rate multiplier
+     */
+    setHungerMultiplier(multiplier) {
+        this.hungerMultiplier = multiplier;
+        // Update existing fish
+        this.fish.forEach(fish => {
+            fish.hungerMultiplier = multiplier;
+        });
     }
 
     /**
@@ -749,6 +763,7 @@ class FishManager {
         }
         
         const fish = new Fish(fishData, fishType);
+        fish.hungerMultiplier = this.hungerMultiplier; // Apply current multiplier
         this.fish.push(fish);
         
         return fish;

@@ -459,7 +459,8 @@ function createAquariumRoutes(db) {
                         foodTTL: 30000, // 30 seconds
                         saveInterval: 5000, // 5 seconds
                         hungerCheckInterval: 60000, // 1 minute
-                        maxHunger: 100
+                        maxHunger: 100,
+                        hungerMultiplier: parseFloat(process.env.HUNGER_MULTIPLIER) || 1.0
                     }
                 }
             });

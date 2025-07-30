@@ -166,38 +166,49 @@ class AquariumSystem {
     async loadAquariumState() {
         try {
             const response = await fetch(`${this.serverUrl}/aquarium/state?psid=${this.psid}`);
-
+            
             if (!response.ok) {
+                if (response.status === 404) {
+                    // Create new aquarium
+                    await this.createNewAquarium();
+                    return;
+                }
                 throw new Error(`State request failed: ${response.status}`);
             }
-
+            
             const stateData = await response.json();
-
+            
             if (!stateData.success) {
                 throw new Error('Server returned error: ' + stateData.error);
             }
-
+            
             this.aquariumState = stateData.data;
             this.tankLifeSeconds = this.aquariumState.tank_life_sec || 0;
-
+            
+            // Load fish into fish manager
             if (this.aquariumState.fish) {
                 this.aquariumState.fish.forEach(fishData => {
                     this.fishManager.addFish(fishData);
                 });
             }
-
+            
+            // Update decorations
             this.decorations.castle.enabled = this.aquariumState.castle_unlocked || false;
             this.decorations.submarine.enabled = this.aquariumState.submarine_unlocked || false;
+            
+            // Update controls
             this.controlsManager.updateFromServerState(this.aquariumState);
+            
             this.lastServerSync = Date.now();
             this.isOnline = true;
-
+            
             console.log('Aquarium state loaded:', this.aquariumState);
-
+            
         } catch (error) {
             console.warn('Failed to load aquarium state:', error);
             this.isOnline = false;
-
+            
+            // Create minimal state for offline mode
             this.aquariumState = {
                 id: 0,
                 psid: this.psid,
@@ -882,6 +893,11 @@ class AquariumSystem {
         
         if (constants.saveInterval) {
             this.saveInterval = constants.saveInterval;
+        }
+        
+        if (constants.hungerMultiplier && this.fishManager) {
+            // Pass hunger multiplier to fish manager for fish instances
+            this.fishManager.setHungerMultiplier(constants.hungerMultiplier);
         }
     }
 
