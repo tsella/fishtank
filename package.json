@@ -1,0 +1,36 @@
+{
+  "name": "aquae",
+  "version": "1.0.0",
+  "description": "A tamagotchi-style virtual aquarium",
+  "main": "backend/server.js",
+  "scripts": {
+    "start": "node backend/server.js",
+    "dev": "nodemon backend/server.js",
+    "setup": "node backend/db/setup.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "aquarium",
+    "tamagotchi",
+    "virtual",
+    "fish",
+    "game"
+  ],
+  "author": "Aquae Development Team",
+  "license": "MIT",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.0.3",
+    "express": "^4.18.2",
+    "helmet": "^6.1.5",
+    "redis": "^4.6.5",
+    "sqlite3": "^5.1.6",
+    "winston": "^3.8.2"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.10"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  }
+}
