@@ -452,6 +452,11 @@ class AquariumSystem {
         if (this.fishManager && this.foodManager) {
             const foodItems = this.foodManager.getActiveFoodItems();
             this.fishManager.updateAll(deltaTime, foodItems);
+            
+            // Check if we need to respawn fish (no fish alive)
+            if (this.fishManager.getCount() === 0) {
+                this.respawnFish();
+            }
         }
         
         // Update controls
@@ -863,6 +868,25 @@ class AquariumSystem {
             
             // Update local state with server response
             this.aquariumState = result.data;
+            
+            // Update fish IDs with server-assigned IDs if they were temporary
+            if (result.data.fish && this.fishManager) {
+                result.data.fish.forEach(serverFish => {
+                    const localFish = this.fishManager.getFish(serverFish.id);
+                    if (!localFish) {
+                        // Find fish by position if ID doesn't match (new fish case)
+                        const matchingFish = this.fishManager.fish.find(f => 
+                            Math.abs(f.x - serverFish.x) < 50 && 
+                            Math.abs(f.y - serverFish.y) < 50 &&
+                            f.type === serverFish.type
+                        );
+                        if (matchingFish && matchingFish.id !== serverFish.id) {
+                            matchingFish.id = serverFish.id; // Update with server ID
+                        }
+                    }
+                });
+            }
+            
             this.lastSaveTime = Date.now();
             this.lastServerSync = Date.now();
             this.needsSave = false;
@@ -880,6 +904,22 @@ class AquariumSystem {
                 console.warn('Max sync attempts reached, going offline');
             }
         }
+    }
+
+    /**
+     * Get current aquarium statistics
+     * @returns {Object} Aquarium statistics
+     */
+    getStats() {
+        return {
+            tankLifeSeconds: this.tankLifeSeconds,
+            fishCount: this.fishManager ? this.fishManager.getCount() : 0,
+            foodLevel: this.foodManager ? this.foodManager.getFoodLevel() : 0,
+            activeFoodItems: this.foodManager ? this.foodManager.getActiveFoodItems().length : 0,
+            isOnline: this.isOnline,
+            fps: this.fps,
+            decorations: this.decorations
+        };
     }
 
     /**
@@ -911,19 +951,53 @@ class AquariumSystem {
     }
 
     /**
-     * Get current aquarium statistics
-     * @returns {Object} Aquarium statistics
+     * Respawn a fish when tank is empty
      */
-    getStats() {
-        return {
-            tankLifeSeconds: this.tankLifeSeconds,
-            fishCount: this.fishManager ? this.fishManager.getCount() : 0,
-            foodLevel: this.foodManager ? this.foodManager.getFoodLevel() : 0,
-            activeFoodItems: this.foodManager ? this.foodManager.getActiveFoodItems().length : 0,
-            isOnline: this.isOnline,
-            fps: this.fps,
-            decorations: this.decorations
-        };
+    async respawnFish() {
+        try {
+            console.log('No fish detected - respawning starter fish');
+            
+            // Get available fish types from the fish manager
+            const fishTypes = this.fishManager.fishTypes;
+            if (fishTypes.size === 0) {
+                console.warn('No fish types available for respawning');
+                return;
+            }
+            
+            // Select a common fish as starter, or first available
+            const availableTypes = Array.from(fishTypes.values());
+            const commonFish = availableTypes.filter(fish => fish.rarity === 'common');
+            const starterFishType = commonFish.length > 0 ? commonFish[0] : availableTypes[0];
+            
+            // Create new fish data
+            const newFishData = {
+                id: Date.now(), // Temporary ID
+                type: starterFishType.name,
+                hunger: 0,
+                x: 400 + Math.random() * 1120, // Random position in safe area
+                y: 400 + Math.random() * 400,
+                last_fed: new Date().toISOString(),
+                spawn_count: 0
+            };
+            
+            // Add fish to the manager
+            const fish = this.fishManager.addFish(newFishData);
+            if (fish) {
+                console.log(`Respawned ${starterFishType.name} fish`);
+                
+                // Reset tank life since all fish died
+                this.tankLifeSeconds = 0;
+                
+                // Mark for server save to persist the new fish
+                this.markForSave();
+                
+                // Update UI
+                this.updateUI();
+            }
+            
+        } catch (error) {
+            console.error('Failed to respawn fish:', error);
+        }
     }
 
     /**
