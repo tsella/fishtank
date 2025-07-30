@@ -145,6 +145,9 @@ FISH_X=name,feed_interval_min,hunger_threshold,rarity,cycle,size
 - **↓ (Down Arrow)**: Toggle background music
 - **F12 / Ctrl+Shift+I**: Toggle debug panel
 
+### Development Controls (localhost only)
+- **T**: Toggle day/night cycle for testing fish behavior
+
 ### Mouse/Touch Controls
 - Click UI buttons for the same functionality as keyboard controls
 - All controls have visual feedback and tooltips

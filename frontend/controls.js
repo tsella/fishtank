@@ -18,7 +18,8 @@ class ControlsManager {
             castle: ['ArrowLeft', 'KeyA'],
             submarine: ['ArrowRight', 'KeyD'],
             music: ['ArrowDown', 'KeyS'],
-            debug: ['F12', 'KeyI'] // Ctrl+Shift+I
+            debug: ['F12', 'KeyI'], // Ctrl+Shift+I
+            debugTime: ['KeyT'] // T key for time toggle (development only)
         };
         
         // Button references
@@ -192,6 +193,12 @@ class ControlsManager {
             this.triggerDebugToggle();
             return;
         }
+        
+        // Debug time toggle (development only)
+        if (this.isKeyForAction('debugTime', key) && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
+            this.triggerDebugTimeToggle();
+            return;
+        }
     }
 
     /**
@@ -355,6 +362,16 @@ class ControlsManager {
             if (this.callbacks.onDebugToggle) {
                 this.callbacks.onDebugToggle(!isVisible);
             }
+        }
+    }
+
+    /**
+     * Trigger debug time toggle (development only)
+     */
+    triggerDebugTimeToggle() {
+        const aquariumSystem = window.getAquariumSystem?.();
+        if (aquariumSystem) {
+            aquariumSystem.toggleDebugTimeOfDay();
         }
     }
 

@@ -40,6 +40,9 @@ class AquariumSystem {
         this.frameCount = 0;
         this.fps = 60;
         
+        // Debug features
+        this.debugTimeOverride = null; // null = normal time, 'day' or 'night' = forced
+        
         // Network state
         this.isOnline = true;
         this.lastServerSync = 0;
@@ -496,6 +499,9 @@ class AquariumSystem {
             p5.scale(scale);
             p5.image(this.backgroundImage, 0, 0);
             p5.pop();
+            
+            // Apply night overlay if it's night time
+            this.applyNightOverlay(p5);
         } else {
             // Fallback: Draw gradient background
             this.renderGradientBackground(p5);
@@ -506,12 +512,42 @@ class AquariumSystem {
     }
 
     /**
+     * Apply dark blue night overlay to background image
+     * @param {Object} p5 - p5.js instance
+     */
+    applyNightOverlay(p5) {
+        // Determine if it's night time
+        let isNightTime;
+        if (this.debugTimeOverride) {
+            isNightTime = this.debugTimeOverride === 'night';
+        } else {
+            const hour = new Date().getHours();
+            isNightTime = hour >= 20 || hour < 6;
+        }
+        
+        if (isNightTime) {
+            // Apply dark blue overlay with opacity
+            p5.push();
+            p5.fill(25, 25, 112, 120); // Dark blue with 120/255 opacity (~47%)
+            p5.noStroke();
+            p5.rect(0, 0, 1920, 1080);
+            p5.pop();
+        }
+    }
+
+    /**
      * Render gradient background as fallback
      * @param {Object} p5 - p5.js instance
      */
     renderGradientBackground(p5) {
-        // Sky gradient
-        const hour = new Date().getHours();
+        // Sky gradient - use debug time override if set
+        let hour;
+        if (this.debugTimeOverride) {
+            hour = this.debugTimeOverride === 'day' ? 12 : 0; // Noon or midnight
+        } else {
+            hour = new Date().getHours();
+        }
+        
         let skyColor1, skyColor2;
         
         if (hour >= 6 && hour < 20) {
@@ -730,9 +766,16 @@ class AquariumSystem {
      * @param {Object} p5 - p5.js instance
      */
     renderWaterEffects(p5) {
-        // Light rays in water
-        const hour = new Date().getHours();
-        if (hour >= 6 && hour < 20) {
+        // Light rays in water - use debug time override if set
+        let isDayTime;
+        if (this.debugTimeOverride) {
+            isDayTime = this.debugTimeOverride === 'day';
+        } else {
+            const hour = new Date().getHours();
+            isDayTime = hour >= 6 && hour < 20;
+        }
+        
+        if (isDayTime) {
             p5.push();
             p5.stroke(255, 255, 255, 30);
             p5.strokeWeight(10);
@@ -763,8 +806,16 @@ class AquariumSystem {
      * Update time of day and related systems
      */
     updateTimeOfDay() {
-        const hour = new Date().getHours();
-        const newTimeOfDay = (hour >= 6 && hour < 20) ? 'day' : 'night';
+        let newTimeOfDay;
+        
+        if (this.debugTimeOverride) {
+            // Use debug override
+            newTimeOfDay = this.debugTimeOverride;
+        } else {
+            // Use real time
+            const hour = new Date().getHours();
+            newTimeOfDay = (hour >= 6 && hour < 20) ? 'day' : 'night';
+        }
         
         if (newTimeOfDay !== this.currentTimeOfDay) {
             this.currentTimeOfDay = newTimeOfDay;
@@ -774,8 +825,28 @@ class AquariumSystem {
                 this.audioManager.updateTimeOfDay(newTimeOfDay);
             }
             
-            console.log(`Time of day changed to: ${newTimeOfDay}`);
+            console.log(`Time of day changed to: ${newTimeOfDay}${this.debugTimeOverride ? ' (DEBUG)' : ''}`);
         }
+    }
+
+    /**
+     * Toggle debug day/night mode (development only)
+     */
+    toggleDebugTimeOfDay() {
+        if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+            return; // Only allow in development
+        }
+        
+        if (this.debugTimeOverride === null) {
+            this.debugTimeOverride = 'night';
+        } else if (this.debugTimeOverride === 'night') {
+            this.debugTimeOverride = 'day';
+        } else {
+            this.debugTimeOverride = null;
+        }
+        
+        console.log(`Debug time override: ${this.debugTimeOverride || 'disabled (using real time)'}`);
+        this.updateTimeOfDay();
     }
 
     /**

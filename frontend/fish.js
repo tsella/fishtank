@@ -102,7 +102,15 @@ class Fish {
      * @returns {boolean} Whether fish is active
      */
     checkActivity() {
-        const hour = new Date().getHours();
+        // Get current time of day from aquarium system for debug override support
+        const aquariumSystem = window.getAquariumSystem?.();
+        let hour;
+        
+        if (aquariumSystem && aquariumSystem.debugTimeOverride) {
+            hour = aquariumSystem.debugTimeOverride === 'day' ? 12 : 0;
+        } else {
+            hour = new Date().getHours();
+        }
         
         if (this.cycle === 'diurnal') {
             return hour >= 6 && hour < 20;
