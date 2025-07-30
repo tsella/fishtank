@@ -228,7 +228,13 @@ class AquariumLogic {
                         
                         const spawnConditions = fishConfig.getSpawnConditions(fishType);
                         if (fish.spawn_count >= spawnConditions.feedingsRequired) {
-                            await this.spawnFish(aquarium, fishType);
+                            // Select a random fish type based on tank maturity, not the same type
+                            const tankLifeHours = aquarium.tank_life_sec / 3600;
+                            const selectedFishType = fishConfig.selectRandomFish(tankLifeHours);
+                            
+                            if (selectedFishType) {
+                                await this.spawnFish(aquarium, selectedFishType);
+                            }
                             changes.spawn_count = 0;
                         }
                     }
