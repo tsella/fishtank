@@ -226,7 +226,7 @@ class Fish {
         // Face the food direction immediately when seeking food
         const dx = this.targetFood.x - this.x;
         if (Math.abs(dx) > 5) { // Only change direction if there's significant movement
-            this.direction = dx > 0 ? 1 : -1;
+            this.direction = dx > 0 ? -1 : 1;
         }
         
         // Check if reached food (larger collision radius for easier eating)
@@ -247,8 +247,9 @@ class Fish {
                 this.lastFed = new Date();
                 this.spawnCount++;
                 
-                // Mark for server update
+                // Mark for server update with feeding flag
                 this.needsUpdate = true;
+                this.justFed = true; // Flag to indicate this fish was just fed
                 
                 console.log(`Fish ${this.id} ate food! Hunger now: ${this.hunger}`);
             }
@@ -676,7 +677,7 @@ class Fish {
      * @returns {Object} Fish data
      */
     getServerData() {
-        return {
+        const data = {
             id: this.id,
             type: this.type,
             hunger: Math.round(this.hunger * 100) / 100,
@@ -685,6 +686,14 @@ class Fish {
             last_fed: this.lastFed.toISOString(),
             spawn_count: this.spawnCount
         };
+        
+        // Include feeding flag if fish was just fed
+        if (this.justFed) {
+            data.fed = true;
+            this.justFed = false; // Reset flag after including it
+        }
+        
+        return data;
     }
 
     /**

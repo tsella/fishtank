@@ -462,6 +462,12 @@ class AquariumSystem {
             const foodItems = this.foodManager.getActiveFoodItems();
             this.fishManager.updateAll(deltaTime, foodItems);
             
+            // Check if any fish were fed and need server sync
+            const fishNeedingUpdate = this.fishManager.getFishNeedingUpdate();
+            if (fishNeedingUpdate.length > 0) {
+                this.markForSave();
+            }
+            
             // Check if we need to respawn fish (no fish alive)
             if (this.fishManager.getCount() === 0) {
                 this.respawnFish();
@@ -912,8 +918,14 @@ class AquariumSystem {
                 throw new Error('Server returned error: ' + result.error);
             }
             
-            // Update local state with server response
+            // Update local state with server response (including updated feeding count)
+            const oldFeedingCount = this.aquariumState.total_feedings || 0;
             this.aquariumState = result.data;
+            
+            // Check if feeding count changed and update UI immediately
+            if (this.aquariumState.total_feedings !== oldFeedingCount) {
+                this.updateUI();
+            }
             
             // Update fish IDs with server-assigned IDs if they were temporary
             if (result.data.fish && this.fishManager) {
