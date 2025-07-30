@@ -223,6 +223,12 @@ class Fish {
         this.targetX = this.targetFood.x;
         this.targetY = this.targetFood.y;
         
+        // Face the food direction immediately when seeking food
+        const dx = this.targetFood.x - this.x;
+        if (Math.abs(dx) > 5) { // Only change direction if there's significant movement
+            this.direction = dx > 0 ? 1 : -1;
+        }
+        
         // Check if reached food (larger collision radius for easier eating)
         const distance = Math.sqrt(
             Math.pow(this.targetFood.x - this.x, 2) + Math.pow(this.targetFood.y - this.y, 2)
@@ -349,11 +355,20 @@ class Fish {
             this.vx = (dx / distance) * currentSpeed;
             this.vy = (dy / distance) * currentSpeed;
             
-            // Update direction for sprite flipping
-            if (this.vx > 0) {
-                this.direction = 1;
-            } else if (this.vx < 0) {
-                this.direction = -1;
+            // Update direction for sprite flipping - prioritize food seeking
+            if (this.state === 'seeking_food' && this.targetFood) {
+                // When seeking food, face the food regardless of general movement
+                const foodDx = this.targetFood.x - this.x;
+                if (Math.abs(foodDx) > 5) {
+                    this.direction = foodDx > 0 ? -1 : 1;
+                }
+            } else {
+                // Normal movement direction
+                if (this.vx > 0) {
+                    this.direction = 1;
+                } else if (this.vx < 0) {
+                    this.direction = -1;
+                }
             }
             
             // Apply movement with smoothing
