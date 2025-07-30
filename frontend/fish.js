@@ -309,7 +309,7 @@ class Fish {
             this.setState('seeking_food');
             
             // Debug logging
-            console.log(`Fish ${this.id} seeking food at distance ${Math.round(nearestDistance)}`);
+            //console.log(`Fish ${this.id} seeking food at distance ${Math.round(nearestDistance)}`);
         }
     }
 

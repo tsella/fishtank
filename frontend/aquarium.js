@@ -214,6 +214,7 @@ class AquariumSystem {
                 psid: this.psid,
                 tank_life_sec: 0,
                 num_fish: 0,
+                total_feedings: 0,
                 castle_unlocked: false,
                 submarine_unlocked: false,
                 music_enabled: true,
@@ -268,11 +269,19 @@ class AquariumSystem {
                     // Load background image
                     try {
                         this.backgroundImage = p5.loadImage('/assets/images/bg.jpg', 
-                            () => console.log('Background image loaded'),
-                            () => console.warn('Failed to load background image')
+                            () => {
+                                console.log('Background image loaded successfully');
+                                // Force immediate use of the preloaded image
+                                updateLoadingProgress(90, 'Background loaded...');
+                            },
+                            () => {
+                                console.warn('Failed to load background image, using fallback');
+                                this.backgroundImage = null;
+                            }
                         );
                     } catch (error) {
                         console.warn('Background image load error:', error);
+                        this.backgroundImage = null;
                     }
                 };
                 
@@ -473,6 +482,31 @@ class AquariumSystem {
      * @param {Object} p5 - p5.js instance
      */
     renderBackground(p5) {
+        // If we have a background image, use it
+        if (this.backgroundImage && this.backgroundImage.width > 0) {
+            p5.push();
+            // Scale and position the background image to cover the canvas
+            const scaleX = 1920 / this.backgroundImage.width;
+            const scaleY = 1080 / this.backgroundImage.height;
+            const scale = Math.max(scaleX, scaleY); // Cover the entire canvas
+            
+            p5.scale(scale);
+            p5.image(this.backgroundImage, 0, 0);
+            p5.pop();
+        } else {
+            // Fallback: Draw gradient background
+            this.renderGradientBackground(p5);
+        }
+        
+        // Always add water overlay and effects
+        this.renderWaterOverlay(p5);
+    }
+
+    /**
+     * Render gradient background as fallback
+     * @param {Object} p5 - p5.js instance
+     */
+    renderGradientBackground(p5) {
         // Sky gradient
         const hour = new Date().getHours();
         let skyColor1, skyColor2;
@@ -494,9 +528,15 @@ class AquariumSystem {
             p5.stroke(c);
             p5.line(0, y, 1920, y);
         }
-        
-        // Water
-        const waterColor = p5.color(64, 164, 223, 200);
+    }
+
+    /**
+     * Render water overlay and effects
+     * @param {Object} p5 - p5.js instance
+     */
+    renderWaterOverlay(p5) {
+        // Water overlay
+        const waterColor = p5.color(64, 164, 223, 150);
         p5.fill(waterColor);
         p5.noStroke();
         p5.rect(0, 150, 1920, 930);
@@ -766,6 +806,12 @@ class AquariumSystem {
         const fishCountElement = document.getElementById('fish-count');
         if (fishCountElement && this.fishManager) {
             fishCountElement.textContent = this.fishManager.getCount().toString();
+        }
+        
+        // Feeding count
+        const feedingCountElement = document.getElementById('feeding-count');
+        if (feedingCountElement && this.aquariumState) {
+            feedingCountElement.textContent = (this.aquariumState.total_feedings || 0).toString();
         }
     }
 

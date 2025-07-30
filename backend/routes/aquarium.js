@@ -221,6 +221,12 @@ class AquariumLogic {
                     changes.hunger = Math.max(0, fish.hunger - 20);
                     changes.last_fed = new Date().toISOString();
                     
+                    // Increment total feedings counter
+                    await this.db.updateAquarium(aquarium.psid, {
+                        total_feedings: (aquarium.total_feedings || 0) + 1
+                    });
+                    aquarium.total_feedings = (aquarium.total_feedings || 0) + 1;
+                    
                     // Check for spawning
                     if (changes.hunger <= 10) {
                         fish.spawn_count = (fish.spawn_count || 0) + 1;
@@ -242,7 +248,8 @@ class AquariumLogic {
                     logger.aquarium.fishEvent(aquarium.psid, fish.type, 'fed', {
                         fishId: fish.id,
                         newHunger: changes.hunger,
-                        spawnCount: changes.spawn_count
+                        spawnCount: changes.spawn_count,
+                        totalFeedings: aquarium.total_feedings
                     });
                 }
             }

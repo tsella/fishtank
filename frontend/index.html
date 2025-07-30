@@ -7,7 +7,7 @@
     <link rel="stylesheet" href="/style.css">
     
     <!-- Preload critical assets -->
-    <link rel="preload" href="/assets/images/bg.jpg" as="image">
+    <!-- Background image preload removed - using generated gradient instead -->
     
     <!-- External libraries from CDNJS (Chromium M69 compatible) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/0.7.3/p5.min.js"></script>
@@ -58,6 +58,11 @@
             <div class="status-item">
                 <span class="status-label">🐟 Fish:</span>
                 <span id="fish-count">0</span>
+            </div>
+            
+            <div class="status-item">
+                <span class="status-label">🍽️ Feedings:</span>
+                <span id="feeding-count">0</span>
             </div>
         </div>
 
