@@ -40,11 +40,18 @@ class Fish {
         this.breathingOffset = 0;
         
         // Behavior state
-        this.state = 'wandering'; // 'wandering', 'seeking_food', 'eating', 'resting'
+        this.state = 'wandering'; // 'wandering', 'seeking_food', 'eating', 'resting', 'dying'
         this.targetFood = null;
         this.restTimer = 0;
         this.lastStateChange = Date.now();
         this.hungerMultiplier = 1.0; // Will be set by fish manager
+        
+        // Death animation state
+        this.isDying = false;
+        this.deathStartTime = 0;
+        this.deathDuration = 3000; // 3 seconds death animation
+        this.deathOpacity = 1.0;
+        this.deathGrayscale = 0.0;
         
         // Visual properties
         this.color = this.getFishColor();
@@ -118,6 +125,12 @@ class Fish {
         // Update activity status
         this.isActive = this.checkActivity();
         
+        // Update death animation if dying
+        if (this.isDying) {
+            this.updateDeathAnimation(deltaTime);
+            return; // Skip other updates when dying
+        }
+        
         // Update hunger over time
         this.updateHunger(dtSeconds);
         
@@ -139,8 +152,8 @@ class Fish {
      * @param {number} deltaTime - Time in seconds
      */
     updateHunger(deltaTime) {
-        if (this.hunger >= this.hungerThreshold) {
-            return; // Fish is already at max hunger
+        if (this.isDying || this.hunger >= this.hungerThreshold) {
+            return; // Fish is dying or already at max hunger
         }
         
         // Calculate hunger rate based on activity - now configurable
@@ -150,6 +163,11 @@ class Fish {
         const hungerRate = baseRate * hungerMultiplier * activityMultiplier;
         
         this.hunger = Math.min(this.hungerThreshold, this.hunger + (hungerRate * deltaTime));
+        
+        // Check if fish should die from hunger
+        if (this.hunger >= this.hungerThreshold && !this.isDying) {
+            this.startDying();
+        }
     }
 
     /**
@@ -251,7 +269,7 @@ class Fish {
                 this.needsUpdate = true;
                 this.justFed = true; // Flag to indicate this fish was just fed
                 
-                console.log(`Fish ${this.id} ate food! Hunger now: ${this.hunger}`);
+                console.log(`Fish ${this.id} ate food! Hunger now: ${this.hunger}, Spawn count: ${this.spawnCount}/5`);
             }
             
             this.targetFood = null;
@@ -310,7 +328,7 @@ class Fish {
             this.setState('seeking_food');
             
             // Debug logging
-            //console.log(`Fish ${this.id} seeking food at distance ${Math.round(nearestDistance)}`);
+            console.log(`Fish ${this.id} seeking food at distance ${Math.round(nearestDistance)}`);
         }
     }
 
@@ -401,9 +419,75 @@ class Fish {
     }
 
     /**
+     * Start death animation
+     */
+    startDying() {
+        if (this.isDying) return; // Already dying
+        
+        this.isDying = true;
+        this.state = 'dying';
+        this.deathStartTime = Date.now();
+        this.deathOpacity = 1.0;
+        this.deathGrayscale = 0.0;
+        
+        // Play death sound
+        const audioManager = window.getAudioManager?.();
+        if (audioManager) {
+            audioManager.playEffect('death', 0.5); // Assuming death sound exists
+        }
+        
+        console.log(`Fish ${this.id} (${this.type}) is dying from hunger`);
+    }
+
+    /**
+     * Update death animation
+     * @param {number} deltaTime - Time elapsed in milliseconds
+     */
+    updateDeathAnimation(deltaTime) {
+        const elapsed = Date.now() - this.deathStartTime;
+        const progress = Math.min(elapsed / this.deathDuration, 1.0);
+        
+        // Animate grayscale transition (0 to 1)
+        this.deathGrayscale = progress;
+        
+        // Animate opacity fade out (1 to 0)
+        this.deathOpacity = 1.0 - progress;
+        
+        // Slow down movement
+        this.vx *= 0.95;
+        this.vy *= 0.95;
+        
+        // Fish sinks slowly
+        this.y += 10 * (deltaTime / 1000);
+        
+        // Check if death animation is complete
+        if (progress >= 1.0) {
+            this.markForRemoval();
+        }
+    }
+
+    /**
+     * Mark fish for removal from the aquarium
+     */
+    markForRemoval() {
+        this.shouldRemove = true;
+        console.log(`Fish ${this.id} death animation complete - ready for removal`);
+    }
+
+    /**
+     * Check if fish should be removed
+     */
+    shouldBeRemoved() {
+        return this.shouldRemove === true;
+    }
+
+    /**
      * Constrain fish position within aquarium bounds
      */
     constrainPosition() {
+        // Skip constraining when dying (let them sink)
+        if (this.isDying) return;
+        
         // Add margin for fish size to prevent going offscreen
         const margin = Math.max(this.width, this.height) * 0.75; // Account for 1.5x scale
         
@@ -459,8 +543,16 @@ class Fish {
         const fishScale = 1.5 * breathingScale; // 1.5x bigger fish
         p5.scale(fishScale);
         
-        // Set opacity based on activity
-        const alpha = this.isActive ? 255 : 180;
+        // Set opacity based on activity and death state
+        let alpha = this.isActive ? 255 : 180;
+        if (this.isDying) {
+            alpha = alpha * this.deathOpacity;
+        }
+        
+        // Apply grayscale filter for dying fish
+        if (this.isDying && this.deathGrayscale > 0) {
+            // p5.js doesn't have built-in grayscale, so we'll modify colors manually
+        }
         
         // Draw fish body
         this.drawFishBody(p5, alpha);
@@ -471,20 +563,27 @@ class Fish {
         // Draw tail
         this.drawTail(p5, alpha);
         
-        // Draw eye
-        this.drawEye(p5, alpha);
+        // Draw eye (X eyes when dying)
+        if (this.isDying) {
+            this.drawDeadEye(p5, alpha);
+        } else {
+            this.drawEye(p5, alpha);
+        }
         
         p5.pop();
         
-        // Draw hunger bar above fish (outside of scaled transform)
-        this.drawHungerBar(p5);
-        
-        // Draw hunger indicator if very hungry
-        if (this.hunger > 70) {
-            p5.push();
-            p5.translate(this.x, this.y - this.height * 1.5);
-            this.drawHungerIndicator(p5);
-            p5.pop();
+        // Don't draw hunger bar or indicators when dying
+        if (!this.isDying) {
+            // Draw hunger bar above fish (outside of scaled transform)
+            this.drawHungerBar(p5);
+            
+            // Draw hunger indicator if very hungry
+            if (this.hunger > 70) {
+                p5.push();
+                p5.translate(this.x, this.y - this.height * 1.5);
+                this.drawHungerIndicator(p5);
+                p5.pop();
+            }
         }
     }
 
@@ -494,8 +593,20 @@ class Fish {
      * @param {number} alpha - Opacity value
      */
     drawFishBody(p5, alpha) {
+        // Get base color
+        let bodyColor = p5.color(this.color);
+        
+        // Apply grayscale effect when dying
+        if (this.isDying && this.deathGrayscale > 0) {
+            const gray = (p5.red(bodyColor) + p5.green(bodyColor) + p5.blue(bodyColor)) / 3;
+            const r = p5.lerp(p5.red(bodyColor), gray, this.deathGrayscale);
+            const g = p5.lerp(p5.green(bodyColor), gray, this.deathGrayscale);
+            const b = p5.lerp(p5.blue(bodyColor), gray, this.deathGrayscale);
+            bodyColor = p5.color(r, g, b);
+        }
+        
         // Main body (ellipse)
-        p5.fill(p5.red(this.color), p5.green(this.color), p5.blue(this.color), alpha);
+        p5.fill(p5.red(bodyColor), p5.green(bodyColor), p5.blue(bodyColor), alpha);
         p5.stroke(0, 0, 0, alpha * 0.3);
         p5.strokeWeight(1);
         p5.ellipse(0, 0, this.width, this.height);
@@ -511,6 +622,24 @@ class Fish {
             p5.ellipse(-this.width * 0.2, 0, 4, this.height * 0.8);
             p5.ellipse(this.width * 0.1, 0, 4, this.height * 0.8);
         }
+    }
+
+    /**
+     * Draw dead fish eyes (X marks)
+     * @param {Object} p5 - p5.js instance
+     * @param {number} alpha - Opacity value
+     */
+    drawDeadEye(p5, alpha) {
+        p5.push();
+        p5.translate(-this.width * 0.2, -this.height * 0.1);
+        
+        // Draw X over the eye
+        p5.stroke(0, 0, 0, alpha);
+        p5.strokeWeight(2);
+        p5.line(-3, -3, 3, 3);
+        p5.line(-3, 3, 3, -3);
+        
+        p5.pop();
     }
 
     /**
@@ -817,14 +946,55 @@ class FishManager {
     }
 
     /**
-     * Update all fish
+     * Update all fish and handle death cleanup
      * @param {number} deltaTime - Time elapsed in milliseconds
      * @param {Array} foodItems - Available food items
      */
     updateAll(deltaTime, foodItems = []) {
+        // Update all fish
         this.fish.forEach(fish => {
             fish.update(deltaTime, foodItems);
         });
+        
+        // Remove dead fish
+        const aliveFish = this.fish.filter(fish => !fish.shouldBeRemoved());
+        const deadFishCount = this.fish.length - aliveFish.length;
+        
+        if (deadFishCount > 0) {
+            console.log(`Removed ${deadFishCount} dead fish from aquarium`);
+            this.fish = aliveFish;
+            
+            // Trigger respawn logic if all fish died
+            if (this.fish.length === 0) {
+                this.scheduleRespawn();
+            }
+        }
+    }
+
+    /**
+     * Schedule respawn after delay when all fish die
+     */
+    scheduleRespawn() {
+        if (this.respawnTimeout) {
+            clearTimeout(this.respawnTimeout);
+        }
+        
+        console.log('All fish died - scheduling respawn in 5 seconds...');
+        
+        this.respawnTimeout = setTimeout(() => {
+            // Trigger respawn through main aquarium system
+            const aquariumSystem = window.getAquariumSystem?.();
+            if (aquariumSystem) {
+                aquariumSystem.respawnFish();
+                
+                // Play spawn sound
+                const audioManager = window.getAudioManager?.();
+                if (audioManager) {
+                    audioManager.playEffect('spawn', 0.7);
+                }
+            }
+            this.respawnTimeout = null;
+        }, 5000); // 5 second delay
     }
 
     /**

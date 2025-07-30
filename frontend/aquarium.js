@@ -468,10 +468,7 @@ class AquariumSystem {
                 this.markForSave();
             }
             
-            // Check if we need to respawn fish (no fish alive)
-            if (this.fishManager.getCount() === 0) {
-                this.respawnFish();
-            }
+            // Note: Respawn logic is now handled by FishManager.scheduleRespawn()
         }
         
         // Update controls
