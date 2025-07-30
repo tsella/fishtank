@@ -481,6 +481,14 @@ class AquariumSystem {
         
         // Update environment effects
         this.updateBubbles(deltaTime);
+        
+        // Update debug panel if visible (every 30 frames to reduce overhead)
+        if (this.frameCount % 30 === 0) {
+            const debugPanel = document.getElementById('debug-panel');
+            if (debugPanel && debugPanel.style.display === 'block') {
+                this.updateDebugPanel();
+            }
+        }
     }
 
     /**
@@ -898,21 +906,28 @@ class AquariumSystem {
         
         const debugInfo = {
             fps: Math.round(this.fps),
-            tankLife: this.tankLifeSeconds,
+            tankLife: `${Math.floor(this.tankLifeSeconds / 3600)}h ${Math.floor((this.tankLifeSeconds % 3600) / 60)}m`,
             fishCount: this.fishManager ? this.fishManager.getCount() : 0,
             foodLevel: this.foodManager ? Math.round(this.foodManager.getFoodLevel()) : 0,
             activeFoodItems: this.foodManager ? this.foodManager.getActiveFoodItems().length : 0,
-            timeOfDay: this.currentTimeOfDay,
+            totalFeedings: this.aquariumState ? (this.aquariumState.total_feedings || 0) : 0,
+            timeOfDay: this.currentTimeOfDay + (this.debugTimeOverride ? ' (DEBUG)' : ''),
             isOnline: this.isOnline,
             lastSync: this.lastServerSync ? new Date(this.lastServerSync).toLocaleTimeString() : 'Never'
         };
         
         if (this.fishManager) {
-            Object.assign(debugInfo, this.fishManager.getStats());
+            const fishStats = this.fishManager.getStats();
+            Object.assign(debugInfo, {
+                healthyFish: fishStats.healthy,
+                hungryFish: fishStats.hungry,
+                criticalFish: fishStats.critical,
+                activeFish: fishStats.activeFish
+            });
         }
         
         debugContent.innerHTML = Object.entries(debugInfo)
-            .map(([key, value]) => `<div>${key}: ${value}</div>`)
+            .map(([key, value]) => `<div><strong>${key}:</strong> ${value}</div>`)
             .join('');
     }
 

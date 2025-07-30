@@ -18,7 +18,7 @@ class ControlsManager {
             castle: ['ArrowLeft', 'KeyA'],
             submarine: ['ArrowRight', 'KeyD'],
             music: ['ArrowDown', 'KeyS'],
-            debug: ['F12', 'KeyI'], // Ctrl+Shift+I
+            debug: ['KeyI'], // I key for debug panel
             debugTime: ['KeyT'] // T key for time toggle (development only)
         };
         
@@ -189,7 +189,7 @@ class ControlsManager {
         }
         
         // Debug controls
-        if (this.isKeyForAction('debug', key) && (event.ctrlKey && event.shiftKey || key === 'F12')) {
+        if (this.isKeyForAction('debug', key)) {
             this.triggerDebugToggle();
             return;
         }
@@ -353,7 +353,7 @@ class ControlsManager {
     triggerDebugToggle() {
         const debugPanel = document.getElementById('debug-panel');
         if (debugPanel) {
-            const isVisible = debugPanel.style.display !== 'none';
+            const isVisible = debugPanel.style.display === 'block';
             debugPanel.style.display = isVisible ? 'none' : 'block';
             
             this.showFeedback(isVisible ? 'Debug panel hidden' : 'Debug panel shown', 'info');

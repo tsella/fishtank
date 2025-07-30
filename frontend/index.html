@@ -217,12 +217,7 @@
         // Debug panel toggle (development)
         if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
             document.addEventListener('keydown', function(event) {
-                if (event.key === 'F12' || (event.ctrlKey && event.shiftKey && event.key === 'I')) {
-                    const debugPanel = document.getElementById('debug-panel');
-                    if (debugPanel) {
-                        debugPanel.style.display = debugPanel.style.display === 'none' ? 'block' : 'none';
-                    }
-                }
+                // Removed F12 handling since it's now handled by controls system
             });
         }
     </script>
