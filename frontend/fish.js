@@ -366,9 +366,6 @@ class Fish {
         
         if (!this.isDying) {
             this.drawHungerBar3D(p5);
-            if (this.hunger > 70) {
-                this.drawHungerIndicator3D(p5);
-            }
         }
 
         p5.scale(this.direction, 1, 1);
@@ -394,7 +391,11 @@ class Fish {
     }
 
     drawFishBody3D(p5) {
-        p5.ellipsoid(this.width / 2, this.height / 2, this.height / 3);
+        if (this.type === 'Dragonfish') {
+            p5.ellipsoid(this.width / 1.5, this.height / 2, this.height / 3);
+        } else {
+            p5.ellipsoid(this.width / 2, this.height / 2, this.height / 3);
+        }
 
         if (this.type === 'Clownfish') {
             p5.push();
@@ -412,7 +413,15 @@ class Fish {
         if (this.type === 'Angelfish') {
             p5.translate(0, -this.height * 0.5, 0);
             p5.rotateZ(this.finOffset * 0.01 + p5.PI / 4);
-            p5.box(this.width * 0.8, this.height * 0.8, 2);
+            p5.plane(this.width * 1.2, this.height * 1.2);
+        } else if (this.type === 'Dragonfish') {
+            for(let i = 0; i < 5; i++) {
+                p5.push();
+                p5.translate(this.width * (0.4 - i * 0.2), -this.height * 0.4, 0);
+                p5.rotateZ(this.finOffset * 0.01);
+                p5.box(this.width * 0.1, this.height * 0.4, 2);
+                p5.pop();
+            }
         } else {
             p5.translate(0, -this.height * 0.4, 0);
             p5.rotateZ(this.finOffset * 0.01);
@@ -423,7 +432,7 @@ class Fish {
         p5.push();
         p5.translate(0, 0, this.height / 3);
         p5.rotateY(p5.PI / 4 + this.finOffset * 0.015);
-        p5.box(this.width * 0.3, this.height * 0.5, 1);
+        p5.plane(this.width * 0.5, this.height * 0.5);
         p5.pop();
     }
 
@@ -432,30 +441,37 @@ class Fish {
         p5.translate(-this.width * 0.5, 0, 0);
         p5.rotateY(this.tailOffset * 0.02);
         if (this.type === 'Betta') {
-            p5.box(this.width * 1.5, this.height * 1.5, 1);
+            p5.plane(this.width * 1.5, this.height * 1.5);
         } else if (this.type === 'Goldfish') {
             p5.push();
             p5.translate(0, this.height * 0.2, 0);
-            p5.box(this.width * 0.6, this.height * 0.6, 1);
+            p5.plane(this.width * 0.8, this.height * 0.8);
             p5.pop();
             p5.push();
             p5.translate(0, -this.height * 0.2, 0);
-            p5.box(this.width * 0.6, this.height * 0.6, 1);
+            p5.plane(this.width * 0.8, this.height * 0.8);
             p5.pop();
         } else {
-            p5.box(this.width * 0.4, this.height * 0.8, 1);
+            p5.plane(this.width * 0.6, this.height);
         }
         p5.pop();
     }
     
     drawEye3D(p5) {
         p5.push();
-        p5.translate(this.width * 0.3, -this.height * 0.1, this.height / 3.5);
-        p5.fill(255);
-        p5.sphere(2);
+        p5.translate(this.width * 0.3, -this.height * 0.1, this.height / 3);
+        
+        // Sclera
+        p5.specularMaterial(255);
+        p5.sphere(2.5);
+        
+        // Pupil
+        p5.push();
         p5.translate(0,0,0.5);
-        p5.fill(0);
-        p5.sphere(1);
+        p5.ambientMaterial(0);
+        p5.sphere(1.5);
+        p5.pop();
+
         p5.pop();
     }
 
@@ -485,25 +501,6 @@ class Fish {
             p5.box(fillWidth, barHeight - 2, 2);
             p5.pop();
         }
-        p5.pop();
-    }
-    
-    drawHungerIndicator3D(p5) {
-        p5.push();
-        const indicatorY = - (this.height * this.scaleMultiplier * 0.8) - 15;
-        p5.translate(0, indicatorY, 0);
-        
-        // Main bubble
-        p5.ambientMaterial(255, 255, 255);
-        p5.sphere(10);
-
-        // Food icon
-        p5.push();
-        p5.translate(0, 0, 8);
-        p5.ambientMaterial(139, 69, 19);
-        p5.sphere(3);
-        p5.pop();
-
         p5.pop();
     }
 
