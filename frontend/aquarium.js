@@ -522,6 +522,7 @@ class AquariumSystem {
      * @param {number} y - Y position
      */
     renderCastle(p5, x, y) {
+        const scaleFactor = 6;
         p5.push();
         p5.translate(x, y, -300);
         p5.fill(139, 139, 139);
@@ -529,18 +530,18 @@ class AquariumSystem {
         
         // Base
         p5.push();
-        p5.translate(0, -30, 0);
-        p5.box(100, 60, 50);
+        p5.translate(0, -30 * scaleFactor, 0);
+        p5.box(100 * scaleFactor, 60 * scaleFactor, 50 * scaleFactor);
         p5.pop();
         
         // Towers
         p5.push();
-        p5.translate(-30, -80, 0);
-        p5.cylinder(15, 80);
+        p5.translate(-30 * scaleFactor, -80 * scaleFactor, 0);
+        p5.cylinder(15 * scaleFactor, 80 * scaleFactor);
         p5.pop();
         p5.push();
-        p5.translate(30, -80, 0);
-        p5.cylinder(15, 80);
+        p5.translate(30 * scaleFactor, -80 * scaleFactor, 0);
+        p5.cylinder(15 * scaleFactor, 80 * scaleFactor);
         p5.pop();
         
         p5.pop();
@@ -553,6 +554,7 @@ class AquariumSystem {
      * @param {number} y - Y position
      */
     renderSubmarine(p5, x, y) {
+        const scaleFactor = 6;
         p5.push();
         p5.translate(x, y, -100);
         p5.rotateY(p5.PI / 8);
@@ -560,12 +562,12 @@ class AquariumSystem {
         p5.stroke(50, 50, 50);
 
         // Body
-        p5.ellipsoid(60, 20, 25);
+        p5.ellipsoid(60 * scaleFactor, 20 * scaleFactor, 25 * scaleFactor);
 
         // Tower
         p5.push();
-        p5.translate(0, -25, 0);
-        p5.box(40, 30, 20);
+        p5.translate(0, -25 * scaleFactor, 0);
+        p5.box(40 * scaleFactor, 30 * scaleFactor, 20 * scaleFactor);
         p5.pop();
 
         p5.pop();
