@@ -269,7 +269,7 @@ class AquariumSystem {
             const sketch = (p5) => {
                 p5.setup = () => {
                     // Create canvas with WEBGL renderer
-                    this.canvas = p5.createCanvas(p5.windowWidth, p5.windowHeight, p5.WEBGL);
+                    this.canvas = p5.createCanvas(1920, 1080, p5.WEBGL);
                     this.canvas.parent('game-container');
                     
                     // Initialize environment effects
@@ -406,9 +406,6 @@ class AquariumSystem {
 
         // --- 3D Scene Rendering ---
         p5.clear();
-        const zoom = 1.2;
-        const cameraZ = (p5.height / 2.0) / p5.tan(p5.PI * 30.0 / 180.0);
-        p5.camera(p5.width / 2, p5.height / 2, cameraZ / zoom, p5.width / 2, p5.height / 2, 0, 0, 1, 0);
         
         p5.ambientLight(150);
         p5.pointLight(255, 255, 255, p5.width/2, p5.height/2, 600);
