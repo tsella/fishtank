@@ -20,7 +20,9 @@ class ControlsManager {
             music: ['ArrowDown', 'KeyS'],
             debug: ['KeyI'], // I key for debug panel
             debugTime: ['KeyT'], // T key for time toggle (development only)
-            spawnFish: ['KeyF'] // F key to spawn fish (development only)
+            spawnFish: ['KeyF'], // F key to spawn fish (development only)
+            unlockCastle: ['KeyC'], // C key to unlock castle (development only)
+            unlockSubmarine: ['KeyV'] // V key to unlock submarine (development only)
         };
         
         // Button references
@@ -44,7 +46,9 @@ class ControlsManager {
             onSubmarineToggle: null,
             onMusicToggle: null,
             onDebugToggle: null,
-            onSpawnFish: null
+            onSpawnFish: null,
+            onUnlockCastle: null,
+            onUnlockSubmarine: null
         };
         
         this.setupEventListeners();
@@ -111,6 +115,8 @@ class ControlsManager {
         else if (this.isKeyForAction('debug', key)) this.triggerDebugToggle();
         else if (this.isKeyForAction('debugTime', key) && this.isDev()) this.triggerDebugTimeToggle();
         else if (this.isKeyForAction('spawnFish', key) && this.isDev()) this.triggerSpawnFish();
+        else if (this.isKeyForAction('unlockCastle', key) && this.isDev()) this.triggerUnlockCastle();
+        else if (this.isKeyForAction('unlockSubmarine', key) && this.isDev()) this.triggerUnlockSubmarine();
     }
 
     isDev() {
@@ -173,6 +179,14 @@ class ControlsManager {
 
     triggerSpawnFish() {
         this.callbacks.onSpawnFish?.();
+    }
+
+    triggerUnlockCastle() {
+        this.callbacks.onUnlockCastle?.();
+    }
+
+    triggerUnlockSubmarine() {
+        this.callbacks.onUnlockSubmarine?.();
     }
 
     updateButtonStates() {

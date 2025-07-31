@@ -357,6 +357,16 @@ class AquariumSystem {
                 this.fishManager.spawnRandomFish();
             }
         });
+
+        this.controlsManager.on('unlockCastle', () => {
+            this.controlsManager.setCastleUnlocked(true);
+            console.log('Debug: Castle unlocked');
+        });
+
+        this.controlsManager.on('unlockSubmarine', () => {
+            this.controlsManager.setSubmarineUnlocked(true);
+            console.log('Debug: Submarine unlocked');
+        });
     }
 
     /**
