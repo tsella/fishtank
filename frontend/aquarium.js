@@ -616,15 +616,15 @@ class AquariumSystem {
         
         if (isDayTime) {
             p5.push();
-            p5.noFill();
-            p5.stroke(255, 255, 255, 15);
+            p5.fill(255, 255, 255, 40);
+            p5.noStroke();
             for (let i = 0; i < 5; i++) {
                 p5.push();
                 const x = 200 + i * 350;
                 const waveOffset = Math.sin((Date.now() + i * 1000) * 0.002) * 50;
                 p5.translate(x + waveOffset, p5.height / 2, -200);
                 p5.rotateZ(p5.PI / 16); // Slight angle
-                p5.plane(20, p5.height * 1.5);
+                p5.plane(40, p5.height * 1.5);
                 p5.pop();
             }
             p5.pop();
