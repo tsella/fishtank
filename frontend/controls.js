@@ -18,6 +18,7 @@ class ControlsManager {
             castle: ['ArrowLeft', 'KeyA'],
             submarine: ['ArrowRight', 'KeyD'],
             music: ['ArrowDown', 'KeyS'],
+            leaderboard: ['ArrowUp', 'KeyW'],
             debug: ['KeyI'], // I key for debug panel
             debugTime: ['KeyT'], // T key for time toggle (development only)
             spawnFish: ['KeyF'], // F key to spawn fish (development only)
@@ -45,6 +46,7 @@ class ControlsManager {
             onCastleToggle: null,
             onSubmarineToggle: null,
             onMusicToggle: null,
+            onLeaderboardToggle: null,
             onDebugToggle: null,
             onSpawnFish: null,
             onUnlockCastle: null,
@@ -112,6 +114,7 @@ class ControlsManager {
         else if (this.isKeyForAction('castle', key)) this.triggerCastleToggle();
         else if (this.isKeyForAction('submarine', key)) this.triggerSubmarineToggle();
         else if (this.isKeyForAction('music', key)) this.triggerMusicToggle();
+        else if (this.isKeyForAction('leaderboard', key)) this.triggerLeaderboardToggle();
         else if (this.isKeyForAction('debug', key)) this.triggerDebugToggle();
         else if (this.isKeyForAction('debugTime', key) && this.isDev()) this.triggerDebugTimeToggle();
         else if (this.isKeyForAction('spawnFish', key) && this.isDev()) this.triggerSpawnFish();
@@ -162,6 +165,10 @@ class ControlsManager {
             this.flashButton('music');
             this.callbacks.onMusicToggle?.(newState);
         }
+    }
+
+    triggerLeaderboardToggle() {
+        this.callbacks.onLeaderboardToggle?.();
     }
 
     triggerDebugToggle() {

@@ -108,6 +108,14 @@ class AquariumLogic {
                 await this.updateUnlockables(aquarium, updates.unlockables);
             }
 
+            // Update leaderboard
+            await this.db.updateLeaderboard(
+                aquarium.psid,
+                aquarium.tank_life_sec,
+                aquarium.num_fish,
+                aquarium.total_feedings
+            );
+
             // Update cache
             await redisClient.setAquarium(psid, aquarium, 300);
             
@@ -176,13 +184,15 @@ class AquariumLogic {
         aquarium.fish = updatedFish;
         aquarium.num_fish = updatedFish.length;
 
-        // Reset tank life if all fish died
+        // Reset tank life and feeding counter if all fish died
         if (fishDied && updatedFish.length === 0) {
             await this.db.updateAquarium(aquarium.psid, {
                 tank_life_sec: 0,
-                num_fish: 0
+                num_fish: 0,
+                total_feedings: 0
             });
             aquarium.tank_life_sec = 0;
+            aquarium.total_feedings = 0;
             
             logger.aquarium.stateEvent(aquarium.psid, 'reset', {
                 reason: 'all_fish_died'
@@ -491,6 +501,28 @@ function createAquariumRoutes(db) {
                 success: false,
                 error: 'Failed to retrieve configuration',
                 code: 'CONFIG_ERROR'
+            });
+        }
+    });
+
+    /**
+     * GET /aquarium/leaderboard
+     * Returns top 10 leaderboard entries
+     */
+    router.get('/leaderboard', async (req, res) => {
+        try {
+            const leaderboardData = await db.getLeaderboard();
+            res.json({
+                success: true,
+                data: leaderboardData,
+                timestamp: new Date().toISOString()
+            });
+        } catch (error) {
+            logger.error('Leaderboard endpoint error', { error: error.message });
+            res.status(500).json({
+                success: false,
+                error: 'Failed to retrieve leaderboard data',
+                code: 'LEADERBOARD_ERROR'
             });
         }
     });

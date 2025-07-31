@@ -47,6 +47,12 @@ class AquariumSystem {
         this.lastServerSync = 0;
         this.syncAttempts = 0;
         this.maxSyncAttempts = 3;
+
+        // Leaderboard state
+        this.leaderboardData = [];
+        this.leaderboardVisible = false;
+        this.lastLeaderboardFetch = 0;
+        this.leaderboardFetchInterval = 30000; // 30 seconds
         
         this.setupPSID();
     }
@@ -99,6 +105,8 @@ class AquariumSystem {
             
             updateLoadingProgress(95, 'Starting game systems...');
             this.setupGameLoop();
+            this.setupLeaderboard();
+            await this.fetchLeaderboard();
             
             updateLoadingProgress(100, 'Ready!');
             
@@ -345,6 +353,10 @@ class AquariumSystem {
         this.controlsManager.on('musicToggle', (enabled) => {
             this.updateTimeOfDay();
         });
+
+        this.controlsManager.on('leaderboardToggle', () => {
+            this.toggleLeaderboard();
+        });
         
         this.controlsManager.on('debugToggle', (visible) => {
             if (visible) {
@@ -386,6 +398,13 @@ class AquariumSystem {
             this.updateTimeOfDay();
             this.updateUI();
         }, 1000);
+
+        // Leaderboard refresh interval
+        setInterval(() => {
+            if (this.leaderboardVisible && Date.now() - this.lastLeaderboardFetch > this.leaderboardFetchInterval) {
+                this.fetchLeaderboard();
+            }
+        }, this.leaderboardFetchInterval);
         
         this.lastFrameTime = Date.now();
     }
@@ -923,6 +942,100 @@ class AquariumSystem {
             }
         } catch (error) {
             console.error('Failed to respawn fish:', error);
+        }
+    }
+
+    /**
+     * Setup leaderboard UI elements and event listeners
+     */
+    setupLeaderboard() {
+        const toggleBtn = document.getElementById('leaderboard-toggle-btn');
+        const closeBtn = document.getElementById('leaderboard-close-btn');
+        
+        if (toggleBtn) {
+            toggleBtn.addEventListener('click', () => this.toggleLeaderboard());
+        }
+        if (closeBtn) {
+            closeBtn.addEventListener('click', () => this.toggleLeaderboard(false));
+        }
+    }
+
+    /**
+     * Fetch leaderboard data from server
+     */
+    async fetchLeaderboard() {
+        this.lastLeaderboardFetch = Date.now();
+        try {
+            const response = await fetch(`${this.serverUrl}/aquarium/leaderboard`);
+            if (!response.ok) {
+                throw new Error(`Leaderboard request failed: ${response.status}`);
+            }
+            const result = await response.json();
+            if (result.success) {
+                this.leaderboardData = result.data;
+                this.renderLeaderboard();
+            } else {
+                console.warn('Failed to fetch leaderboard:', result.error);
+            }
+        } catch (error) {
+            console.warn('Error fetching leaderboard:', error);
+        }
+    }
+
+    /**
+     * Render leaderboard data into the UI
+     */
+    renderLeaderboard() {
+        const contentEl = document.getElementById('leaderboard-content');
+        if (!contentEl) return;
+
+        if (!this.leaderboardData || this.leaderboardData.length === 0) {
+            contentEl.innerHTML = '<div class="leaderboard-empty">No scores yet. Be the first!</div>';
+            return;
+        }
+
+        const html = this.leaderboardData.map((entry, index) => {
+            const name = `...${entry.psid.slice(-5)}`;
+            const tankLifeHours = Math.floor(entry.tank_life_sec / 3600);
+            const tankLifeMinutes = Math.floor((entry.tank_life_sec % 3600) / 60);
+            const isCurrentUser = entry.psid === this.psid;
+
+            return `
+                <div class="leaderboard-entry ${isCurrentUser ? 'current-user' : ''}">
+                    <div class="leaderboard-rank">${index + 1}</div>
+                    <div class="leaderboard-name" title="${entry.psid}">${name}</div>
+                    <div class="leaderboard-score">
+                        <div>${tankLifeHours}h ${tankLifeMinutes}m <span class="score-label">life</span></div>
+                        <div>${entry.num_fish} <span class="score-label">fish</span></div>
+                        <div>${entry.total_feedings} <span class="score-label">feeds</span></div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        contentEl.innerHTML = html;
+    }
+
+    /**
+     * Toggle leaderboard visibility
+     * @param {boolean} [forceState] - Optional state to force (true=visible, false=hidden)
+     */
+    toggleLeaderboard(forceState) {
+        this.leaderboardVisible = forceState !== undefined ? forceState : !this.leaderboardVisible;
+        const panel = document.getElementById('leaderboard-panel');
+        const toggleBtn = document.getElementById('leaderboard-toggle-btn');
+        
+        if (panel) {
+            panel.style.display = this.leaderboardVisible ? 'flex' : 'none';
+        }
+        if (toggleBtn) {
+            toggleBtn.style.display = this.leaderboardVisible ? 'none' : 'flex';
+        }
+        
+        document.body.classList.toggle('leaderboard-open', this.leaderboardVisible);
+        
+        if (this.leaderboardVisible) {
+            this.fetchLeaderboard(); // Refresh when opening
         }
     }
 

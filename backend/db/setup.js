@@ -1,6 +1,6 @@
 /**
  * Database Schema Setup for Aquae
- * Creates SQLite tables for aquariums and fish with proper constraints
+ * Creates SQLite tables for aquariums, fish, and leaderboard with proper constraints
  */
 
 const sqlite3 = require('sqlite3').verbose();
@@ -58,11 +58,23 @@ async function setupDatabase(dbPath = process.env.DB_PATH || './aquae.db') {
             )
         `;
 
+        // Create leaderboard table
+        const createLeaderboardTable = `
+            CREATE TABLE IF NOT EXISTS leaderboard (
+                psid TEXT PRIMARY KEY,
+                tank_life_sec INTEGER NOT NULL,
+                num_fish INTEGER NOT NULL,
+                total_feedings INTEGER NOT NULL,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        `;
+
         // Create indexes for performance
         const createIndexes = [
             'CREATE INDEX IF NOT EXISTS idx_aquariums_psid ON aquariums(psid)',
             'CREATE INDEX IF NOT EXISTS idx_fish_aquarium_id ON fish(aquarium_id)',
-            'CREATE INDEX IF NOT EXISTS idx_fish_type ON fish(type)'
+            'CREATE INDEX IF NOT EXISTS idx_fish_type ON fish(type)',
+            'CREATE INDEX IF NOT EXISTS idx_leaderboard_tank_life ON leaderboard(tank_life_sec DESC)'
         ];
 
         // Execute table creation
@@ -83,6 +95,15 @@ async function setupDatabase(dbPath = process.env.DB_PATH || './aquae.db') {
                     return;
                 }
                 logger.info('Fish table created/verified');
+            });
+
+            db.run(createLeaderboardTable, (err) => {
+                if (err) {
+                    logger.error('Failed to create leaderboard table', { error: err.message });
+                    reject(err);
+                    return;
+                }
+                logger.info('Leaderboard table created/verified');
             });
 
             // Create indexes
@@ -178,8 +199,8 @@ class AquariumDB {
     async createAquarium(psid) {
         return new Promise((resolve, reject) => {
             const query = `
-                INSERT INTO aquariums (psid, tank_life_sec, num_fish)
-                VALUES (?, 0, 0)
+                INSERT INTO aquariums (psid, tank_life_sec, num_fish, total_feedings)
+                VALUES (?, 0, 0, 0)
             `;
 
             this.db.run(query, [psid], function(err) {
@@ -301,6 +322,70 @@ class AquariumDB {
                     return;
                 }
                 resolve();
+            });
+        });
+    }
+
+    /**
+     * Get leaderboard data
+     * @returns {Promise<Array<Object>>} Top 10 leaderboard entries
+     */
+    async getLeaderboard() {
+        return new Promise((resolve, reject) => {
+            const query = `
+                SELECT psid, tank_life_sec, num_fish, total_feedings
+                FROM leaderboard
+                ORDER BY tank_life_sec DESC
+                LIMIT 10
+            `;
+            this.db.all(query, [], (err, rows) => {
+                if (err) {
+                    reject(err);
+                    return;
+                }
+                resolve(rows);
+            });
+        });
+    }
+
+    /**
+     * Update leaderboard with new score, keeping only the top 10
+     * @param {string} psid - Player session ID
+     * @param {number} tank_life_sec - Tank life in seconds
+     * @param {number} num_fish - Number of fish
+     * @param {number} total_feedings - Total feedings
+     * @returns {Promise<void>}
+     */
+    async updateLeaderboard(psid, tank_life_sec, num_fish, total_feedings) {
+        return new Promise((resolve, reject) => {
+            this.db.serialize(() => {
+                // Use INSERT OR REPLACE to add/update the player's score
+                const upsertQuery = `
+                    INSERT INTO leaderboard (psid, tank_life_sec, num_fish, total_feedings, updated_at)
+                    VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+                    ON CONFLICT(psid) DO UPDATE SET
+                        tank_life_sec = excluded.tank_life_sec,
+                        num_fish = excluded.num_fish,
+                        total_feedings = excluded.total_feedings,
+                        updated_at = CURRENT_TIMESTAMP
+                `;
+                this.db.run(upsertQuery, [psid, tank_life_sec, num_fish, total_feedings], (err) => {
+                    if (err) return reject(err);
+
+                    // After inserting, trim the leaderboard to the top 10
+                    const trimQuery = `
+                        DELETE FROM leaderboard
+                        WHERE psid NOT IN (
+                            SELECT psid FROM leaderboard
+                            ORDER BY tank_life_sec DESC
+                            LIMIT 10
+                        )
+                    `;
+                    this.db.run(trimQuery, (err) => {
+                        if (err) return reject(err);
+                        resolve();
+                    });
+                });
             });
         });
     }
