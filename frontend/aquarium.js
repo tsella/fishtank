@@ -806,27 +806,25 @@ class AquariumSystem {
             const result = await response.json();
             if (!result.success) throw new Error('Server returned error: ' + result.error);
             
-            const oldFeedingCount = this.aquariumState.total_feedings || 0;
+            const oldFishCount = this.fishManager ? this.fishManager.getCount() : 0;
+
             this.aquariumState = result.data;
-            
-            if (this.aquariumState.total_feedings !== oldFeedingCount) {
-                this.updateUI();
+
+            // Resync the fishManager with the authoritative state from the server
+            if (this.fishManager) {
+                this.fishManager.clearAll();
+                if (this.aquariumState.fish) {
+                    this.aquariumState.fish.forEach(fishData => {
+                        this.fishManager.addFish(fishData);
+                    });
+                }
             }
-            
-            if (result.data.fish && this.fishManager) {
-                result.data.fish.forEach(serverFish => {
-                    const localFish = this.fishManager.getFish(serverFish.id);
-                    if (!localFish) {
-                        const matchingFish = this.fishManager.fish.find(f => 
-                            Math.abs(f.x - serverFish.x) < 50 && 
-                            Math.abs(f.y - serverFish.y) < 50 &&
-                            f.type === serverFish.type
-                        );
-                        if (matchingFish && matchingFish.id !== serverFish.id) {
-                            matchingFish.id = serverFish.id;
-                        }
-                    }
-                });
+
+            const newFishCount = this.fishManager ? this.fishManager.getCount() : 0;
+
+            // Play spawn sound if a fish was added
+            if (newFishCount > oldFishCount) {
+                window.getAudioManager?.().playEffect('spawn', 0.7);
             }
             
             this.lastSaveTime = Date.now();
@@ -834,7 +832,9 @@ class AquariumSystem {
             this.needsSave = false;
             this.syncAttempts = 0;
             this.isOnline = true;
-            console.log('Aquarium state saved successfully');
+            console.log('Aquarium state saved successfully, fish count:', newFishCount);
+
+            this.updateUI();
             
         } catch (error) {
             console.warn('Failed to save aquarium state:', error);

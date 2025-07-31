@@ -227,14 +227,14 @@ class AquariumLogic {
                     });
                     aquarium.total_feedings = (aquarium.total_feedings || 0) + 1;
                     
-                    // Check for spawning - simplified conditions
-                    // Any feeding counts toward spawning, not just when fish is full
-                    fish.spawn_count = (fish.spawn_count || 0) + 1;
-                    changes.spawn_count = fish.spawn_count;
-                    
+                    // Refined spawning logic
+                    const newSpawnCount = (fish.spawn_count || 0) + 1;
                     const spawnConditions = fishConfig.getSpawnConditions(fishType);
-                    if (fish.spawn_count >= spawnConditions.feedingsRequired) {
-                        // Select a random fish type based on tank maturity, not the same type
+                    
+                    if (newSpawnCount >= spawnConditions.feedingsRequired) {
+                        // Spawn a new fish and reset the counter
+                        changes.spawn_count = 0;
+                        
                         const tankLifeHours = aquarium.tank_life_sec / 3600;
                         const selectedFishType = fishConfig.selectRandomFish(tankLifeHours);
                         
@@ -243,17 +243,19 @@ class AquariumLogic {
                             logger.aquarium.fishEvent(aquarium.psid, selectedFishType.name, 'spawned_from_feeding', {
                                 parentFishId: fish.id,
                                 parentFishType: fish.type,
-                                spawnCount: fish.spawn_count,
+                                spawnCount: newSpawnCount,
                                 totalFeedings: aquarium.total_feedings
                             });
                         }
-                        changes.spawn_count = 0;
+                    } else {
+                        // Just increment the counter
+                        changes.spawn_count = newSpawnCount;
                     }
 
                     logger.aquarium.fishEvent(aquarium.psid, fish.type, 'fed', {
                         fishId: fish.id,
                         newHunger: changes.hunger,
-                        spawnCount: fish.spawn_count,
+                        spawnCount: changes.spawn_count,
                         totalFeedings: aquarium.total_feedings
                     });
                 }

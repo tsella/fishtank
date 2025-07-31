@@ -154,7 +154,7 @@ class FoodManager {
             z: Math.random() * 100 - 50, // Random z-depth
             size: this.foodSize + (Math.random() * 4 - 2), // Slight size variation
             color: this.foodColors[Math.floor(Math.random() * this.foodColors.length)],
-            drift: (Math.random() - 0.5) * 20, // Horizontal drift speed
+            drift: (Math.random() - 0.2) * 20, // Horizontal drift speed
             createdAt: Date.now(),
             inWater: false,
             consumed: false
