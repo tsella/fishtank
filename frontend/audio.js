@@ -27,8 +27,9 @@ class AudioManager {
             effects: {
                 feed: '/assets/sounds/feed.wav',
                 spawn: '/assets/sounds/spawn.wav',
-                bubble: '/assets/sounds/bubble.wav',
-                unlock: '/assets/sounds/unlock.wav'
+                bubble: '/assets/sounds/bubble.mp3',
+                unlock: '/assets/sounds/unlock.wav',
+                death: '/assets/sounds/chew.mp3'
             }
         };
         
@@ -359,15 +360,9 @@ class AudioManager {
      * Handle user interaction to unlock audio (required for autoplay policies)
      */
     handleUserInteraction() {
-        if (!this.enabled) return;
-
-        // Try to unlock audio context
-        this.sounds.forEach(howl => {
-            if (typeof howl.once === 'function') {
-                howl.once('unlock', () => {
-                    console.log('Audio context unlocked');
-                });
-            }
+        if (!this.enabled || Howler.ctx.state === 'running') return;
+        Howler.ctx.resume().then(() => {
+            console.log('Audio context unlocked');
         });
     }
 

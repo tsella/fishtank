@@ -103,6 +103,7 @@ class ControlsManager {
     }
 
     handleKeyPress(key, event) {
+        window.getAudioManager()?.handleUserInteraction();
         if (this.isKeyForAction('feed', key)) this.triggerFeed();
         else if (this.isKeyForAction('castle', key)) this.triggerCastleToggle();
         else if (this.isKeyForAction('submarine', key)) this.triggerSubmarineToggle();
