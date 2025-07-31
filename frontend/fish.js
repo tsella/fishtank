@@ -393,26 +393,61 @@ class Fish {
         p5.pop();
     }
 
-    drawFishBody3D(p5) { p5.ellipsoid(this.width / 2, this.height / 2, this.height / 3); }
+    drawFishBody3D(p5) {
+        p5.ellipsoid(this.width / 2, this.height / 2, this.height / 3);
+
+        if (this.type === 'Clownfish') {
+            p5.push();
+            p5.ambientMaterial(255);
+            p5.translate(this.width * 0.2, 0, 0);
+            p5.box(2, this.height, this.height / 2);
+            p5.translate(-this.width * 0.4, 0, 0);
+            p5.box(2, this.height, this.height / 2);
+            p5.pop();
+        }
+    }
+
     drawFins3D(p5) {
         p5.push();
-        p5.translate(0, -this.height * 0.4, 0);
-        p5.rotateZ(this.finOffset * 0.01);
-        p5.box(this.width * 0.4, this.height * 0.4, 2);
+        if (this.type === 'Angelfish') {
+            p5.translate(0, -this.height * 0.5, 0);
+            p5.rotateZ(this.finOffset * 0.01 + p5.PI / 4);
+            p5.box(this.width * 0.8, this.height * 0.8, 2);
+        } else {
+            p5.translate(0, -this.height * 0.4, 0);
+            p5.rotateZ(this.finOffset * 0.01);
+            p5.box(this.width * 0.4, this.height * 0.4, 2);
+        }
         p5.pop();
+
         p5.push();
         p5.translate(0, 0, this.height / 3);
         p5.rotateY(p5.PI / 4 + this.finOffset * 0.015);
         p5.box(this.width * 0.3, this.height * 0.5, 1);
         p5.pop();
     }
+
     drawTail3D(p5) {
         p5.push();
         p5.translate(-this.width * 0.5, 0, 0);
         p5.rotateY(this.tailOffset * 0.02);
-        p5.box(this.width * 0.4, this.height * 0.8, 1);
+        if (this.type === 'Betta') {
+            p5.box(this.width * 1.5, this.height * 1.5, 1);
+        } else if (this.type === 'Goldfish') {
+            p5.push();
+            p5.translate(0, this.height * 0.2, 0);
+            p5.box(this.width * 0.6, this.height * 0.6, 1);
+            p5.pop();
+            p5.push();
+            p5.translate(0, -this.height * 0.2, 0);
+            p5.box(this.width * 0.6, this.height * 0.6, 1);
+            p5.pop();
+        } else {
+            p5.box(this.width * 0.4, this.height * 0.8, 1);
+        }
         p5.pop();
     }
+    
     drawEye3D(p5) {
         p5.push();
         p5.translate(this.width * 0.3, -this.height * 0.1, this.height / 3.5);
