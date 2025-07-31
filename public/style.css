@@ -151,7 +151,7 @@ canvas {
 
 .ui-panel {
     position: absolute;
-    background: rgba(0, 0, 0, 0.8);
+    background: rgba(37, 22, 68, 0.44);
     backdrop-filter: blur(10px);
     -webkit-backdrop-filter: blur(10px);
     border-radius: 12px;

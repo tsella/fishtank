@@ -14,7 +14,7 @@ class ControlsManager {
         
         // Control mappings
         this.controls = {
-            feed: ['Space', ' '],
+            feed: ['Space', ' ', 'Enter'],
             castle: ['ArrowLeft', 'KeyA'],
             submarine: ['ArrowRight', 'KeyD'],
             music: ['ArrowDown', 'KeyS'],
