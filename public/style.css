@@ -107,14 +107,34 @@ html, body {
     width: 100vw;
     height: 100vh;
     overflow: hidden;
-    display: flex;
-    justify-content: center;
-    align-items: center;
+    background-image: url('/assets/images/bg.jpg');
+    background-size: cover;
+    background-position: center;
+}
+
+/* Night overlay */
+#game-container::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(25, 25, 112, 0.47); /* Dark blue overlay */
+    opacity: 0;
+    transition: opacity 1.5s ease-in-out;
+    pointer-events: none;
+}
+
+#game-container.night::after {
+    opacity: 1;
 }
 
 /* Ensure canvas itself has no extra margin */
 canvas {
     display: block;
+    width: 100% !important;
+    height: 100% !important;
 }
 
 

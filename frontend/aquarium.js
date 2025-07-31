@@ -24,7 +24,6 @@ class AquariumSystem {
         
         // Rendering state
         this.canvas = null;
-        this.backgroundImage = null;
         this.currentTimeOfDay = 'day';
         
         // Environment effects
@@ -268,28 +267,9 @@ class AquariumSystem {
         return new Promise((resolve) => {
             // p5.js sketch
             const sketch = (p5) => {
-                p5.preload = () => {
-                    // Load background image
-                    try {
-                        this.backgroundImage = p5.loadImage('/assets/images/bg.jpg', 
-                            () => {
-                                console.log('Background image loaded successfully');
-                                updateLoadingProgress(90, 'Background loaded...');
-                            },
-                            () => {
-                                console.warn('Failed to load background image, using fallback');
-                                this.backgroundImage = null;
-                            }
-                        );
-                    } catch (error) {
-                        console.warn('Background image load error:', error);
-                        this.backgroundImage = null;
-                    }
-                };
-                
                 p5.setup = () => {
                     // Create canvas with WEBGL renderer
-                    this.canvas = p5.createCanvas(1920, 1080, p5.WEBGL);
+                    this.canvas = p5.createCanvas(p5.windowWidth, p5.windowHeight, p5.WEBGL);
                     this.canvas.parent('game-container');
                     
                     // Initialize environment effects
@@ -302,6 +282,10 @@ class AquariumSystem {
                 p5.draw = () => {
                     this.renderFrame(p5);
                 };
+
+                p5.windowResized = () => {
+                    p5.resizeCanvas(p5.windowWidth, p5.windowHeight);
+                }
                 
                 // Store p5 instance
                 this.p5 = p5;
@@ -421,13 +405,18 @@ class AquariumSystem {
         this.update(deltaTime);
 
         // --- 3D Scene Rendering ---
-        p5.camera(p5.width / 2, p5.height / 2, (p5.height / 2.0) / p5.tan(p5.PI * 30.0 / 180.0), p5.width / 2, p5.height / 2, 0, 0, 1, 0);
+        p5.clear();
+        const zoom = 1.2;
+        const cameraZ = (p5.height / 2.0) / p5.tan(p5.PI * 30.0 / 180.0);
+        p5.camera(p5.width / 2, p5.height / 2, cameraZ / zoom, p5.width / 2, p5.height / 2, 0, 0, 1, 0);
+        
         p5.ambientLight(150);
         p5.pointLight(255, 255, 255, p5.width/2, p5.height/2, 600);
-
-        p5.background(10, 20, 40);
         
-        this.renderBackground(p5);
+        // Translate to use top-left coordinates for drawing 3D objects
+        p5.translate(-p5.width / 2, -p5.height / 2, 0);
+
+        this.renderWaterEffects(p5);
         this.renderSeaweed(p5);
         this.renderDecorations(p5);
 
@@ -439,8 +428,7 @@ class AquariumSystem {
         }
 
         this.renderBubbles(p5);
-        this.renderWaterEffects(p5);
-
+        
         this.updatePerformance();
     }
 
@@ -475,40 +463,6 @@ class AquariumSystem {
             if (debugPanel && debugPanel.style.display === 'block') {
                 this.updateDebugPanel();
             }
-        }
-    }
-
-    /**
-     * Render background
-     * @param {Object} p5 - p5.js instance
-     */
-    renderBackground(p5) {
-        p5.push();
-        p5.translate(p5.width / 2, p5.height / 2, -500);
-        if (this.backgroundImage && this.backgroundImage.width > 0) {
-            p5.texture(this.backgroundImage);
-            p5.noStroke();
-            p5.plane(1920, 1080);
-        } else {
-            let bgColor = (this.currentTimeOfDay === 'day') ? p5.color(135, 206, 235) : p5.color(25, 25, 112);
-            p5.background(bgColor);
-        }
-        p5.pop();
-        this.applyNightOverlay(p5);
-    }
-
-    /**
-     * Apply dark blue night overlay to background image
-     * @param {Object} p5 - p5.js instance
-     */
-    applyNightOverlay(p5) {
-        if (this.currentTimeOfDay === 'night') {
-            p5.push();
-            p5.translate(p5.width / 2, p5.height / 2, 0);
-            p5.fill(25, 25, 112, 120);
-            p5.noStroke();
-            p5.plane(1920, 1080);
-            p5.pop();
         }
     }
     
@@ -659,8 +613,9 @@ class AquariumSystem {
                 p5.push();
                 const x = 200 + i * 350;
                 const waveOffset = Math.sin((Date.now() + i * 1000) * 0.002) * 50;
-                p5.translate(x + waveOffset, 0, -200);
-                p5.line(0,0,0,p5.height);
+                p5.translate(x + waveOffset, p5.height / 2, -200);
+                p5.rotateZ(p5.PI / 16); // Slight angle
+                p5.plane(20, p5.height * 1.5);
                 p5.pop();
             }
             p5.pop();
@@ -685,6 +640,16 @@ class AquariumSystem {
             if (this.audioManager) {
                 this.audioManager.updateTimeOfDay(newTimeOfDay);
             }
+            
+            const gameContainer = document.getElementById('game-container');
+            if(gameContainer) {
+                if(newTimeOfDay === 'night') {
+                    gameContainer.classList.add('night');
+                } else {
+                    gameContainer.classList.remove('night');
+                }
+            }
+            
             console.log(`Time of day changed to: ${newTimeOfDay}${this.debugTimeOverride ? ' (DEBUG)' : ''}`);
         }
     }
