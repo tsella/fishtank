@@ -97,8 +97,9 @@ PG_DATABASE=aquae
 # ... other configurations (Fish, etc.)
 ```
 
-For instructions on setting up a PostgreSQL database, see database.md.
-🎮 Game Controls
+For instructions on setting up a PostgreSQL database, see **[database.md](database.md)**.
+
+## 🎮 Game Controls
 Keyboard Controls
  * Space: Dispense food
  * ← (Left Arrow): Toggle castle decoration
@@ -111,8 +112,10 @@ Development Controls (localhost only)
  * F: Spawn a random fish
  * C: Unlock the castle
  * V: Unlock the submarine
-🏗️ Architecture
-Project Structure
+
+## 🏗️ Architecture
+### Project Structure
+```env
 aquae/
 ├── backend/
 │   ├── db/
@@ -130,57 +133,68 @@ aquae/
 ├── database.md                  # PostgreSQL setup guide
 ├── deployment.md                # AWS Lambda deployment guide
 └── ...                          # Other project files
+```
 
-API Endpoints
+## API Endpoints
  * GET /aquarium/state?psid={id}: Returns current aquarium state.
  * POST /aquarium/state?psid={id}: Updates aquarium state.
  * GET /aquarium/config: Returns game configuration.
  * GET /aquarium/leaderboard: Returns top 10 leaderboard entries.
  * GET /health: Health check endpoint.
-Database Schema
+
+## Database Schema
 The schema includes tables for aquariums, fish, and leaderboard. Both SQLite and PostgreSQL backends use this structure.
-🎯 Game Mechanics
-Leaderboard
+
+# 🎯 Game Mechanics
+## Leaderboard
  * The top 10 players are displayed on the leaderboard.
  * Ranking is primarily based on the longest Tank Life.
  * Your score is automatically submitted to the leaderboard when your game state is saved.
  * The leaderboard display refreshes every 30 seconds.
-Fish Lifecycle
+## Fish Lifecycle
  * Fish can spawn after being well-fed.
  * Fish hunger increases over time; they will die if not fed.
  * If all fish die, the tank's life and feeding counters reset.
-Unlockables
+## Unlockables
  * Castle: Unlocked with 2+ fish.
  * Submarine: Unlocked with 4+ fish.
-🔧 Development
-Adding New Fish Types
+
+# 🔧 Development
+
+## Adding New Fish Types
  * Define in .env:
    FISH_6=NewFish,3,90,rare,diurnal,35x25
 
  * Add color mapping in frontend/fish.js:
+```code
    const colorMap = {
     'NewFish': '#FF6B6B',
     // ... existing fish
-};
+   };
+```
 
  * Optional: Add custom rendering in the drawFishBody method
-Browser Compatibility
+
+## Browser Compatibility
  * Primary target: Chromium M69+
  * Audio: Progressive enhancement with user interaction unlocking
-🐛 Debugging
-Debug Panel
+
+# 🐛 Debugging
+## Debug Panel
 Press I to toggle the debug panel showing:
  * FPS and performance metrics
  * Fish statistics (count, health status)
  * Food system status
  * Network connectivity
  * Game state information
-Logging
+ 
+## Logging
 Winston logs are written to:
  * Console (development)
  * logs/aquae.log (all levels)
  * logs/exceptions.log (uncaught exceptions)
  * logs/rejections.log (unhandled promise rejections)
-📄 License
+
+# 📄 License
 MIT License - See LICENSE file for details.
 Aquae - Where virtual fish thrive! 🐠✨
