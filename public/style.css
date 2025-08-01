@@ -13,7 +13,7 @@
 html, body {
     height: 100%;
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 50%, #06b6d4 100%);
+    background: #000; /* Black background for canvas container */
     overflow: hidden;
     user-select: none;
     -webkit-user-select: none;
@@ -101,11 +101,42 @@ html, body {
 
 /* Game Container */
 #game-container {
-    position: relative;
+    position: absolute;
+    top: 0;
+    left: 0;
     width: 100vw;
     height: 100vh;
     overflow: hidden;
+    background-image: url('/assets/images/bg.jpg');
+    background-size: cover;
+    background-position: center;
 }
+
+/* Night overlay */
+#game-container::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(25, 25, 112, 0.47); /* Dark blue overlay */
+    opacity: 0;
+    transition: opacity 1.5s ease-in-out;
+    pointer-events: none;
+}
+
+#game-container.night::after {
+    opacity: 1;
+}
+
+/* Ensure canvas itself has no extra margin */
+canvas {
+    display: block;
+    width: 100% !important;
+    height: 100% !important;
+}
+
 
 /* UI Overlay */
 #ui-overlay {
@@ -120,7 +151,7 @@ html, body {
 
 .ui-panel {
     position: absolute;
-    background: rgba(0, 0, 0, 0.8);
+    background: rgba(37, 22, 68, 0.44);
     backdrop-filter: blur(10px);
     -webkit-backdrop-filter: blur(10px);
     border-radius: 12px;
@@ -245,24 +276,131 @@ html, body {
     line-height: 1.4;
 }
 
+/* Leaderboard Panel */
+.leaderboard-panel {
+    top: 20px;
+    right: 20px;
+    width: 300px;
+    max-height: calc(100vh - 160px);
+    display: flex;
+    flex-direction: column;
+    z-index: 102;
+}
+
+.leaderboard-panel h3 {
+    margin-bottom: 0.75rem;
+    color: #f59e0b; /* Gold color for leaderboard */
+    text-align: center;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+    padding-bottom: 0.5rem;
+}
+
+#leaderboard-content {
+    overflow-y: auto;
+    flex-grow: 1;
+}
+
+.leaderboard-entry {
+    display: grid;
+    grid-template-columns: 20px 1fr auto;
+    gap: 0.75rem;
+    align-items: center;
+    padding: 0.5rem 0.25rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    font-size: 0.85rem;
+}
+
+.leaderboard-entry:last-child {
+    border-bottom: none;
+}
+
+.leaderboard-entry.current-user {
+    background-color: rgba(59, 130, 246, 0.2);
+    border-left: 3px solid #3b82f6;
+    margin-left: -3px;
+    border-radius: 4px;
+}
+
+.leaderboard-rank {
+    font-weight: bold;
+    text-align: center;
+    color: #f59e0b;
+}
+
+.leaderboard-name {
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.leaderboard-score {
+    text-align: right;
+    font-size: 0.8rem;
+    line-height: 1.3;
+}
+
+.leaderboard-score .score-label {
+    opacity: 0.7;
+    font-size: 0.7rem;
+}
+
+.leaderboard-loading, .leaderboard-empty {
+    text-align: center;
+    padding: 2rem 0;
+    opacity: 0.8;
+}
+
+.leaderboard-close-btn {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background: none;
+    border: none;
+    color: white;
+    font-size: 1.5rem;
+    cursor: pointer;
+    line-height: 1;
+    padding: 0;
+    opacity: 0.7;
+}
+.leaderboard-close-btn:hover {
+    opacity: 1;
+}
+
+.leaderboard-toggle-btn {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: auto;
+    z-index: 101;
+}
+
+.leaderboard-toggle-btn .btn-icon {
+    margin: 0;
+}
+
 /* Debug Panel */
 .debug-panel {
-    top: 20px;
+    top: 80px;
     right: 20px;
     max-width: 300px;
     font-family: 'Courier New', monospace;
     font-size: 0.8rem;
+    transition: transform 0.3s ease;
 }
 
-.debug-panel h3 {
-    margin-bottom: 0.5rem;
-    color: #06b6d4;
+body.leaderboard-open .debug-panel {
+    transform: translateX(calc(100% + 40px));
 }
 
-#debug-content {
-    max-height: 400px;
-    overflow-y: auto;
-}
 
 /* Modal Styles */
 .modal {
@@ -373,6 +511,19 @@ html, body {
     
     .controls-help {
         display: none;
+    }
+
+    .leaderboard-panel {
+        width: calc(100vw - 20px);
+        left: 10px;
+        right: 10px;
+        top: 70px;
+        bottom: 10px;
+        max-height: none;
+    }
+    .leaderboard-toggle-btn {
+        top: 10px;
+        right: 10px;
     }
 }
 

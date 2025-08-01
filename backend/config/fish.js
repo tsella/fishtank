@@ -247,7 +247,7 @@ class FishConfig {
         return {
             feedingsRequired: 5, // Feed any fish 5 times (not necessarily when full)
             minTankLife: fishType.feedIntervalMin, // Minimum tank age in minutes (reduced)
-            maxHunger: 50 // More lenient hunger requirement
+            maxHunger: 30 // More lenient hunger requirement
         };
     }
 

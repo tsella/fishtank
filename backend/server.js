@@ -1,6 +1,6 @@
 /**
  * Aquae Main Server
- * Express.js server with SQLite/Redis backend for virtual aquarium
+ * Express.js server with selectable SQLite/PostgreSQL backend for virtual aquarium
  */
 require('dotenv').config();
 
@@ -10,7 +10,7 @@ const helmet = require('helmet');
 const path = require('path');
 
 const logger = require('./logger');
-const { setupDatabase, AquariumDB } = require('./db/setup');
+const dbFactory = require('./db');
 const { createAquariumRoutes } = require('./routes/aquarium');
 const redisClient = require('./redis/client');
 const fishConfig = require('./config/fish');
@@ -99,6 +99,7 @@ class AquaeServer {
                 version: process.env.npm_package_version || '1.0.0',
                 services: {
                     database: this.db ? 'connected' : 'disconnected',
+                    db_client: process.env.DB_CLIENT || 'sqlite',
                     redis: redisClient.isEnabled() ? 'connected' : 'disabled',
                     fishConfig: fishConfig.getAllFishTypes().length > 0 ? 'loaded' : 'empty'
                 }
@@ -128,6 +129,7 @@ class AquaeServer {
                 res.json({
                     fishConfig: fishConfig.exportSchema(),
                     env: {
+                        DB_CLIENT: process.env.DB_CLIENT,
                         USE_REDIS: process.env.USE_REDIS,
                         NODE_ENV: process.env.NODE_ENV,
                         PORT: process.env.PORT
@@ -222,8 +224,7 @@ class AquaeServer {
     async initializeServices() {
         try {
             logger.info('Initializing database...');
-            const dbInstance = await setupDatabase();
-            this.db = new AquariumDB(dbInstance);
+            this.db = await dbFactory.initialize();
             logger.info('Database initialized successfully');
 
             logger.info('Initializing Redis...');
@@ -255,6 +256,7 @@ class AquaeServer {
                 logger.info('Aquae server started', {
                     port: this.port,
                     environment: process.env.NODE_ENV || 'development',
+                    db_client: process.env.DB_CLIENT || 'sqlite',
                     fishTypes: fishConfig.getAllFishTypes().length,
                     redis: redisClient.isEnabled() ? 'enabled' : 'disabled'
                 });
@@ -280,7 +282,7 @@ class AquaeServer {
 
             try {
                 if (this.db) {
-                    this.db.close();
+                    await this.db.close();
                 }
                 await redisClient.disconnect();
                 logger.info('Graceful shutdown completed');

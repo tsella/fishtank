@@ -148,6 +148,9 @@ FISH_X=name,feed_interval_min,hunger_threshold,rarity,cycle,size
 ### Development Controls (localhost only)
 - **T**: Toggle day/night cycle for testing fish behavior
 - **I**: Show/hide debug information panel
+- **F**: Spawn a random fish
+- **C**: Unlock the castle
+- **V**: Unlock the submarine
 
 ### Mouse/Touch Controls
 - Click UI buttons for the same functionality as keyboard controls
@@ -367,7 +370,7 @@ The codebase follows a modular architecture with clear separation of concerns:
 ## 🐛 Debugging
 
 ### Debug Panel
-Press F12 or Ctrl+Shift+I to toggle the debug panel showing:
+Press I to toggle the debug panel showing:
 - FPS and performance metrics
 - Fish statistics (count, health status)
 - Food system status

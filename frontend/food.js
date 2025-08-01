@@ -1,6 +1,6 @@
 /**
  * Food Management System for Aquae
- * Handles food dispensing, falling, and fish feeding mechanics
+ * Handles food dispensing, falling, and fish feeding mechanics in WebGL
  * Compatible with Chromium M69
  */
 
@@ -151,9 +151,10 @@ class FoodManager {
             id: Date.now() + Math.random(), // Unique ID
             x: x,
             y: y,
+            z: Math.random() * 100 - 50, // Random z-depth
             size: this.foodSize + (Math.random() * 4 - 2), // Slight size variation
             color: this.foodColors[Math.floor(Math.random() * this.foodColors.length)],
-            drift: (Math.random() - 0.5) * 20, // Horizontal drift speed
+            drift: (Math.random() - 0.2) * 20, // Horizontal drift speed
             createdAt: Date.now(),
             inWater: false,
             consumed: false
@@ -223,37 +224,20 @@ class FoodManager {
     }
 
     /**
-     * Render food items using p5.js
+     * Render food items using p5.js in WebGL mode
      * @param {Object} p5 - p5.js instance
      */
     render(p5) {
-        p5.push();
-        
+        p5.noStroke();
         this.activeFoodItems.forEach(food => {
             if (!food.consumed) {
-                // Draw food pellet with slight glow effect
-                p5.fill(food.color);
-                p5.noStroke();
-                
-                // Add glow effect
-                for (let i = 0; i < 3; i++) {
-                    const alpha = 100 - (i * 30);
-                    const size = food.size + (i * 2);
-                    p5.fill(p5.red(food.color), p5.green(food.color), p5.blue(food.color), alpha);
-                    p5.ellipse(food.x, food.y, size, size);
-                }
-                
-                // Draw main food pellet
-                p5.fill(food.color);
-                p5.ellipse(food.x, food.y, food.size, food.size);
-                
-                // Add small highlight
-                p5.fill(255, 255, 255, 150);
-                p5.ellipse(food.x - food.size * 0.2, food.y - food.size * 0.2, food.size * 0.3, food.size * 0.3);
+                p5.push();
+                p5.translate(food.x, food.y, food.z || 0);
+                p5.ambientMaterial(p5.color(food.color));
+                p5.sphere(food.size / 2);
+                p5.pop();
             }
         });
-        
-        p5.pop();
     }
 
     /**

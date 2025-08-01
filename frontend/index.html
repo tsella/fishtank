@@ -91,9 +91,21 @@
             </div>
             
             <div class="controls-help">
-                <p><strong>Controls:</strong> Space=Feed, ←=Castle, →=Submarine, ↓=Music</p>
+                <p><strong>Select</strong> Feed, <strong>←</strong> Castle, <strong>→</strong> Submarine, <strong>↓</strong> Music, <strong>↑</strong> Leaderboard</p>
             </div>
         </div>
+
+        <!-- Leaderboard -->
+        <div id="leaderboard-panel" class="ui-panel leaderboard-panel" style="display: none;">
+            <h3>🏆 Leaderboard</h3>
+            <div id="leaderboard-content">
+                <div class="leaderboard-loading">Loading...</div>
+            </div>
+            <button id="leaderboard-close-btn" class="leaderboard-close-btn" title="Close Leaderboard">&times;</button>
+        </div>
+        <button id="leaderboard-toggle-btn" class="control-btn leaderboard-toggle-btn" title="Show Leaderboard">
+            <span class="btn-icon">🏆</span>
+        </button>
 
         <!-- Debug info (development only) -->
         <div id="debug-panel" class="ui-panel debug-panel" style="display: none;">
