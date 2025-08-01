@@ -136,21 +136,39 @@ class AquariumLogic {
                 continue;
             }
 
-            const lastFed = new Date(fish.last_fed);
-            const minutesSinceFed = (now - lastFed) / (1000 * 60);
+            let lastFed = new Date(fish.last_fed);
+
+            // **BUG FIX**: Add safeguard for invalid dates in the database.
+            if (isNaN(lastFed.getTime())) {
+                logger.warn('Invalid last_fed date found for fish.', {
+                    psid: aquarium.psid,
+                    fishId: fish.id,
+                    invalidDate: fish.last_fed
+                });
+                // Assume the fish was just fed to prevent it from dying unfairly.
+                lastFed = now;
+            }
+
+            const secondsSinceFed = (now - lastFed) / 1000;
             
             // Calculate hunger increase
             const isActive = fishConfig.isFishActive(fishType, now);
-            const hungerRate = fishConfig.getHungerRate(fishType, isActive);
+            // **BUG FIX**: Correctly convert hunger rate from per-minute to per-second.
+            const hungerRatePerMinute = fishConfig.getHungerRate(fishType, isActive);
+            const hungerRatePerSecond = hungerRatePerMinute / 60;
             const newHunger = Math.min(fishType.hungerThreshold, 
-                fish.hunger + (minutesSinceFed * hungerRate));
+                fish.hunger + (secondsSinceFed * hungerRatePerSecond));
 
             // Check if fish died from hunger
             if (newHunger >= fishType.hungerThreshold) {
+                // **BUG FIX**: Enhanced logging for fish death.
                 logger.aquarium.fishEvent(aquarium.psid, fish.type, 'died', {
                     fishId: fish.id,
-                    hunger: newHunger,
-                    minutesSinceFed
+                    finalHunger: newHunger,
+                    hungerThreshold: fishType.hungerThreshold,
+                    secondsSinceFed: secondsSinceFed,
+                    lastFedTimestamp: fish.last_fed,
+                    currentTime: now.toISOString()
                 });
                 
                 await this.db.removeFish(fish.id);
