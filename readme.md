@@ -95,6 +95,7 @@ PG_PASSWORD=password
 PG_DATABASE=aquae
 
 # ... other configurations (Fish, etc.)
+```
 
 For instructions on setting up a PostgreSQL database, see database.md.
 🎮 Game Controls
