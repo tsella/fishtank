@@ -106,6 +106,7 @@ Keyboard Controls
  * → (Right Arrow): Toggle submarine decoration
  * ↓ (Down Arrow): Toggle background music
  * ↑ (Up Arrow): Toggle leaderboard
+
 Development Controls (localhost only)
  * T: Toggle day/night cycle
  * I: Show/hide debug information panel
@@ -136,11 +137,11 @@ aquae/
 ```
 
 ## API Endpoints
- * GET /aquarium/state?psid={id}: Returns current aquarium state.
- * POST /aquarium/state?psid={id}: Updates aquarium state.
- * GET /aquarium/config: Returns game configuration.
- * GET /aquarium/leaderboard: Returns top 10 leaderboard entries.
- * GET /health: Health check endpoint.
+ * `GET /aquarium/state?psid={id}`: Returns current aquarium state.
+ * `POST /aquarium/state?psid={id}`: Updates aquarium state.
+ * `GET /aquarium/config`: Returns game configuration.
+ * `GET /aquarium/leaderboard`: Returns top 10 leaderboard entries.
+ * `GET /health`: Health check endpoint.
 
 ## Database Schema
 The schema includes tables for aquariums, fish, and leaderboard. Both SQLite and PostgreSQL backends use this structure.
@@ -187,7 +188,7 @@ Press I to toggle the debug panel showing:
  * Food system status
  * Network connectivity
  * Game state information
- 
+
 ## Logging
 Winston logs are written to:
  * Console (development)
