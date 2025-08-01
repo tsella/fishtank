@@ -6,7 +6,6 @@
 const express = require('express');
 const logger = require('../logger');
 const fishConfig = require('../config/fish');
-const redisClient = require('../redis/client');
 
 /**
  * Middleware to validate and sanitize PSID
@@ -50,24 +49,15 @@ class AquariumLogic {
      */
     async getAquariumState(psid) {
         try {
-            // Try Redis cache first
-            let aquarium = await redisClient.getAquarium(psid);
+            let aquarium = await this.db.getAquarium(psid);
             
             if (!aquarium) {
-                // Load from database
-                aquarium = await this.db.getAquarium(psid);
-                
-                if (!aquarium) {
-                    // Create new aquarium
-                    aquarium = await this.db.createAquarium(psid);
-                    logger.aquarium.stateEvent(psid, 'created');
-                } else {
-                    // Update fish hunger and check for deaths
-                    aquarium = await this.updateFishStates(aquarium);
-                }
-
-                // Cache the result
-                await redisClient.setAquarium(psid, aquarium, 300);
+                // Create new aquarium
+                aquarium = await this.db.createAquarium(psid);
+                logger.aquarium.stateEvent(psid, 'created');
+            } else {
+                // Update fish hunger and check for deaths
+                aquarium = await this.updateFishStates(aquarium);
             }
 
             // If no fish in tank, spawn a starter fish
@@ -115,9 +105,6 @@ class AquariumLogic {
                 aquarium.num_fish,
                 aquarium.total_feedings
             );
-
-            // Update cache
-            await redisClient.setAquarium(psid, aquarium, 300);
             
             logger.aquarium.stateEvent(psid, 'updated', {
                 tank_life_sec: aquarium.tank_life_sec,
@@ -167,7 +154,6 @@ class AquariumLogic {
                 });
                 
                 await this.db.removeFish(fish.id);
-                await redisClient.removeFish(aquarium.psid, fish.id);
                 fishDied = true;
                 continue;
             }

@@ -13,7 +13,6 @@ const path = require('path');
 const logger = require('./logger');
 const dbFactory = require('./db');
 const { createAquariumRoutes } = require('./routes/aquarium');
-const redisClient = require('./redis/client');
 const fishConfig = require('./config/fish');
 
 class AquaeServer {
@@ -72,8 +71,7 @@ class AquaeServer {
                 version: process.env.npm_package_version || '1.0.0',
                 services: {
                     database: this.db ? 'connected' : 'disconnected',
-                    db_client: process.env.DB_CLIENT || 'sqlite',
-                    redis: redisClient.isEnabled() ? 'connected' : 'disabled'
+                    db_client: process.env.DB_CLIENT || 'sqlite'
                 }
             });
         });
@@ -108,7 +106,7 @@ class AquaeServer {
     }
 
     /**
-     * Initialize database and Redis connections
+     * Initialize database connection
      */
     async initialize() {
         if (this.initialized) return;
@@ -116,7 +114,6 @@ class AquaeServer {
         try {
             logger.info('Initializing services...');
             this.db = await dbFactory.initialize();
-            await redisClient.connect();
             
             this.setupRoutes();
             this.setupErrorHandlers();
