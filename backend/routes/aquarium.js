@@ -43,24 +43,22 @@ class AquariumLogic {
     }
 
     /**
-     * Get or create aquarium state
+     * Get or create aquarium state, simulating time passage.
+     * This is used when loading the game.
      * @param {string} psid - Player session ID
      * @returns {Promise<Object>} Aquarium state
      */
-    async getAquariumState(psid) {
+    async getAndUpdateAquariumState(psid) {
         try {
             let aquarium = await this.db.getAquarium(psid);
             
             if (!aquarium) {
-                // Create new aquarium
                 aquarium = await this.db.createAquarium(psid);
                 logger.aquarium.stateEvent(psid, 'created');
             } else {
-                // Update fish hunger and check for deaths
                 aquarium = await this.updateFishStates(aquarium);
             }
 
-            // If no fish in tank, spawn a starter fish
             if (aquarium.fish.length === 0) {
                 await this.spawnStarterFish(aquarium);
             }
@@ -73,21 +71,34 @@ class AquariumLogic {
     }
 
     /**
-     * Update aquarium state
+     * Update aquarium state based on client data.
+     * This is used when saving the game.
      * @param {string} psid - Player session ID
-     * @param {Object} updates - State updates
+     * @param {Object} updates - State updates from the client
      * @returns {Promise<Object>} Updated aquarium state
      */
-    async updateAquariumState(psid, updates) {
+    async saveAquariumState(psid, updates) {
         try {
-            const aquarium = await this.getAquariumState(psid);
+            // Fetch the raw state from DB without simulating time forward
+            const aquarium = await this.db.getAquarium(psid);
+            if (!aquarium) {
+                throw new Error('Aquarium not found for saving state.');
+            }
             
-            // Process updates
+            const dbUpdates = {};
+
             if (updates.tank_life_sec !== undefined) {
-                await this.db.updateAquarium(psid, {
-                    tank_life_sec: updates.tank_life_sec
-                });
+                dbUpdates.tank_life_sec = updates.tank_life_sec;
                 aquarium.tank_life_sec = updates.tank_life_sec;
+            }
+
+            if (updates.food_level !== undefined) {
+                dbUpdates.food_level = updates.food_level;
+                aquarium.food_level = updates.food_level;
+            }
+
+            if (Object.keys(dbUpdates).length > 0) {
+                await this.db.updateAquarium(psid, dbUpdates);
             }
 
             if (updates.fish) {
@@ -97,23 +108,21 @@ class AquariumLogic {
             if (updates.unlockables) {
                 await this.updateUnlockables(aquarium, updates.unlockables);
             }
-
-            // Update leaderboard
-            await this.db.updateLeaderboard(
-                aquarium.psid,
-                aquarium.tank_life_sec,
-                aquarium.num_fish,
-                aquarium.total_feedings
-            );
             
-            logger.aquarium.stateEvent(psid, 'updated', {
+            // Update leaderboard for all living fish on every save.
+            for (const fish of aquarium.fish) {
+                await this.db.updateLeaderboard(fish, psid);
+            }
+
+            logger.aquarium.stateEvent(psid, 'saved', {
                 tank_life_sec: aquarium.tank_life_sec,
-                fish_count: aquarium.fish.length
+                fish_count: aquarium.fish.length,
+                food_level: aquarium.food_level
             });
 
             return aquarium;
         } catch (error) {
-            logger.aquarium.error(psid, 'update_state', error);
+            logger.aquarium.error(psid, 'save_state', error);
             throw error;
         }
     }
@@ -131,43 +140,30 @@ class AquariumLogic {
         for (const fish of aquarium.fish) {
             const fishType = fishConfig.getFishType(fish.type);
             if (!fishType) {
-                logger.aquarium.error(aquarium.psid, 'invalid_fish_type', 
-                    new Error(`Unknown fish type: ${fish.type}`));
+                logger.aquarium.error(aquarium.psid, 'invalid_fish_type', new Error(`Unknown fish type: ${fish.type}`));
                 continue;
             }
 
             let lastFed = new Date(fish.last_fed);
 
-            // **BUG FIX**: Add safeguard for invalid dates in the database.
             if (isNaN(lastFed.getTime())) {
                 logger.warn('Invalid last_fed date found for fish.', {
-                    psid: aquarium.psid,
-                    fishId: fish.id,
-                    invalidDate: fish.last_fed
+                    psid: aquarium.psid, fishId: fish.id, invalidDate: fish.last_fed
                 });
-                // Assume the fish was just fed to prevent it from dying unfairly.
                 lastFed = now;
             }
 
             const secondsSinceFed = (now - lastFed) / 1000;
             
-            // Calculate hunger increase
             const isActive = fishConfig.isFishActive(fishType, now);
-            // **BUG FIX**: Correctly convert hunger rate from per-minute to per-second.
             const hungerRatePerMinute = fishConfig.getHungerRate(fishType, isActive);
             const hungerRatePerSecond = hungerRatePerMinute / 60;
-            const newHunger = Math.min(fishType.hungerThreshold, 
-                fish.hunger + (secondsSinceFed * hungerRatePerSecond));
+            const newHunger = Math.min(fishType.hungerThreshold, fish.hunger + (secondsSinceFed * hungerRatePerSecond));
 
-            // Check if fish died from hunger
             if (newHunger >= fishType.hungerThreshold) {
-                // **BUG FIX**: Enhanced logging for fish death.
                 logger.aquarium.fishEvent(aquarium.psid, fish.type, 'died', {
-                    fishId: fish.id,
-                    finalHunger: newHunger,
-                    hungerThreshold: fishType.hungerThreshold,
-                    secondsSinceFed: secondsSinceFed,
-                    lastFedTimestamp: fish.last_fed,
+                    fishId: fish.id, finalHunger: newHunger, hungerThreshold: fishType.hungerThreshold,
+                    secondsSinceFed: secondsSinceFed, lastFedTimestamp: fish.last_fed,
                     currentTime: now.toISOString()
                 });
                 
@@ -176,7 +172,6 @@ class AquariumLogic {
                 continue;
             }
 
-            // Update fish state
             if (Math.abs(newHunger - fish.hunger) > 0.1) {
                 await this.db.updateFish(fish.id, { hunger: newHunger });
                 fish.hunger = newHunger;
@@ -188,23 +183,16 @@ class AquariumLogic {
         aquarium.fish = updatedFish;
         aquarium.num_fish = updatedFish.length;
 
-        // Reset tank life and feeding counter if all fish died
         if (fishDied && updatedFish.length === 0) {
             await this.db.updateAquarium(aquarium.psid, {
-                tank_life_sec: 0,
-                num_fish: 0,
-                total_feedings: 0
+                tank_life_sec: 0, num_fish: 0, total_feedings: 0
             });
             aquarium.tank_life_sec = 0;
             aquarium.total_feedings = 0;
             
-            logger.aquarium.stateEvent(aquarium.psid, 'reset', {
-                reason: 'all_fish_died'
-            });
+            logger.aquarium.stateEvent(aquarium.psid, 'reset', { reason: 'all_fish_died' });
         } else if (fishDied) {
-            await this.db.updateAquarium(aquarium.psid, {
-                num_fish: updatedFish.length
-            });
+            await this.db.updateAquarium(aquarium.psid, { num_fish: updatedFish.length });
         }
 
         return aquarium;
@@ -222,60 +210,53 @@ class AquariumLogic {
 
             const changes = {};
             
-            // Update position
             if (update.x !== undefined && update.y !== undefined) {
                 changes.x = Math.max(0, Math.min(1920, update.x));
                 changes.y = Math.max(0, Math.min(1080, update.y));
             }
+            
+            // Trust the client's hunger value during a save
+            if (update.hunger !== undefined) {
+                changes.hunger = update.hunger;
+            }
 
-            // Handle feeding
             if (update.fed) {
                 const fishType = fishConfig.getFishType(fish.type);
                 if (fishType) {
-                    changes.hunger = Math.max(0, fish.hunger - 20);
+                    changes.hunger = Math.max(0, (changes.hunger || fish.hunger) - 20);
                     changes.last_fed = new Date().toISOString();
                     
-                    // Increment total feedings counter
                     await this.db.updateAquarium(aquarium.psid, {
                         total_feedings: (aquarium.total_feedings || 0) + 1
                     });
                     aquarium.total_feedings = (aquarium.total_feedings || 0) + 1;
                     
-                    // Refined spawning logic
                     const newSpawnCount = (fish.spawn_count || 0) + 1;
                     const spawnConditions = fishConfig.getSpawnConditions(fishType);
                     
                     if (newSpawnCount >= spawnConditions.feedingsRequired) {
-                        // Spawn a new fish and reset the counter
                         changes.spawn_count = 0;
-                        
                         const tankLifeHours = aquarium.tank_life_sec / 3600;
                         const selectedFishType = fishConfig.selectRandomFish(tankLifeHours);
                         
                         if (selectedFishType) {
                             await this.spawnFish(aquarium, selectedFishType);
                             logger.aquarium.fishEvent(aquarium.psid, selectedFishType.name, 'spawned_from_feeding', {
-                                parentFishId: fish.id,
-                                parentFishType: fish.type,
-                                spawnCount: newSpawnCount,
-                                totalFeedings: aquarium.total_feedings
+                                parentFishId: fish.id, parentFishType: fish.type,
+                                spawnCount: newSpawnCount, totalFeedings: aquarium.total_feedings
                             });
                         }
                     } else {
-                        // Just increment the counter
                         changes.spawn_count = newSpawnCount;
                     }
 
                     logger.aquarium.fishEvent(aquarium.psid, fish.type, 'fed', {
-                        fishId: fish.id,
-                        newHunger: changes.hunger,
-                        spawnCount: changes.spawn_count,
-                        totalFeedings: aquarium.total_feedings
+                        fishId: fish.id, newHunger: changes.hunger,
+                        spawnCount: changes.spawn_count, totalFeedings: aquarium.total_feedings
                     });
                 }
             }
 
-            // Apply changes
             if (Object.keys(changes).length > 0) {
                 await this.db.updateFish(fish.id, changes);
                 Object.assign(fish, changes);
@@ -289,28 +270,21 @@ class AquariumLogic {
      * @param {Object} fishType - Fish type to spawn
      */
     async spawnFish(aquarium, fishType) {
-        const newFish = {
-            type: fishType.name,
-            hunger: 0,
-            x: 200 + Math.random() * 1520, // Random x position
-            y: 200 + Math.random() * 680,  // Random y position
-            last_fed: new Date().toISOString(),
-            spawn_count: 0
+        const newFishData = {
+            type: fishType.name, hunger: 0, x: 200 + Math.random() * 1520,
+            y: 200 + Math.random() * 680, last_fed: new Date().toISOString(), spawn_count: 0
         };
 
-        const fishId = await this.db.addFish(aquarium.id, newFish);
-        newFish.id = fishId;
+        const newFishRow = await this.db.addFish(aquarium.id, newFishData);
         
-        aquarium.fish.push(newFish);
+        aquarium.fish.push(newFishRow);
         aquarium.num_fish = aquarium.fish.length;
 
-        await this.db.updateAquarium(aquarium.psid, {
-            num_fish: aquarium.num_fish
-        });
+        await this.db.updateAquarium(aquarium.psid, { num_fish: aquarium.num_fish });
+        await this.db.updateLeaderboard(newFishRow, aquarium.psid);
 
         logger.aquarium.fishEvent(aquarium.psid, fishType.name, 'spawned', {
-            fishId: fishId,
-            totalFish: aquarium.num_fish
+            fishId: newFishRow.id, totalFish: aquarium.num_fish
         });
     }
 
@@ -320,11 +294,8 @@ class AquariumLogic {
      */
     async spawnStarterFish(aquarium) {
         try {
-            // Get a common fish type as starter
             const availableFish = fishConfig.getAllFishTypes();
             const commonFish = availableFish.filter(fish => fish.rarity === 'common');
-            
-            // Default to first common fish, or first available fish if no common ones
             const starterFishType = commonFish.length > 0 ? commonFish[0] : availableFish[0];
             
             if (!starterFishType) {
@@ -332,12 +303,10 @@ class AquariumLogic {
                 return;
             }
 
-            // Spawn the starter fish
             await this.spawnFish(aquarium, starterFishType);
             
             logger.aquarium.fishEvent(aquarium.psid, starterFishType.name, 'starter_spawned', {
-                reason: 'empty_tank',
-                totalFish: aquarium.num_fish
+                reason: 'empty_tank', totalFish: aquarium.num_fish
             });
 
         } catch (error) {
@@ -353,45 +322,32 @@ class AquariumLogic {
     async updateUnlockables(aquarium, unlockables) {
         const updates = {};
 
-        // Castle logic
         if (unlockables.castle !== undefined) {
             if (aquarium.num_fish >= 2) {
                 updates.castle_unlocked = unlockables.castle;
                 aquarium.castle_unlocked = unlockables.castle;
-                
                 logger.aquarium.unlockableEvent(aquarium.psid, 'castle', 
                     unlockables.castle ? 'enabled' : 'disabled');
             } else if (aquarium.castle_unlocked) {
-                // Remove castle if fish count drops below 2
                 updates.castle_unlocked = false;
                 aquarium.castle_unlocked = false;
-                
-                logger.aquarium.unlockableEvent(aquarium.psid, 'castle', 'removed', {
-                    reason: 'insufficient_fish'
-                });
+                logger.aquarium.unlockableEvent(aquarium.psid, 'castle', 'removed', { reason: 'insufficient_fish' });
             }
         }
 
-        // Submarine logic
         if (unlockables.submarine !== undefined) {
             if (aquarium.num_fish >= 4) {
                 updates.submarine_unlocked = unlockables.submarine;
                 aquarium.submarine_unlocked = unlockables.submarine;
-                
                 logger.aquarium.unlockableEvent(aquarium.psid, 'submarine', 
                     unlockables.submarine ? 'enabled' : 'disabled');
             } else if (aquarium.submarine_unlocked) {
-                // Remove submarine if fish count drops below 4
                 updates.submarine_unlocked = false;
                 aquarium.submarine_unlocked = false;
-                
-                logger.aquarium.unlockableEvent(aquarium.psid, 'submarine', 'removed', {
-                    reason: 'insufficient_fish'
-                });
+                logger.aquarium.unlockableEvent(aquarium.psid, 'submarine', 'removed', { reason: 'insufficient_fish' });
             }
         }
 
-        // Music toggle
         if (unlockables.music !== undefined) {
             updates.music_enabled = unlockables.music;
             aquarium.music_enabled = unlockables.music;
@@ -412,76 +368,34 @@ function createAquariumRoutes(db) {
     const router = express.Router();
     const logic = new AquariumLogic(db);
 
-    // Test route to verify the router is working
     router.get('/test', (req, res) => {
-        res.json({
-            success: true,
-            message: 'Aquarium routes are working',
-            hasDb: !!db,
-            timestamp: new Date().toISOString()
-        });
+        res.json({ success: true, message: 'Aquarium routes are working', hasDb: !!db, timestamp: new Date().toISOString() });
     });
 
-    /**
-     * GET /aquarium/state?psid=<id>
-     * Returns current aquarium state
-     */
     router.get('/state', validatePSID, async (req, res) => {
         try {
-            const aquarium = await logic.getAquariumState(req.psid);
-            res.json({
-                success: true,
-                data: aquarium,
-                timestamp: new Date().toISOString()
-            });
+            const aquarium = await logic.getAndUpdateAquariumState(req.psid);
+            res.json({ success: true, data: aquarium, timestamp: new Date().toISOString() });
         } catch (error) {
             logger.aquarium.error(req.psid, 'get_state_endpoint', error);
-            res.status(500).json({
-                success: false,
-                error: 'Failed to retrieve aquarium state',
-                code: 'GET_STATE_ERROR'
-            });
+            res.status(500).json({ success: false, error: 'Failed to retrieve aquarium state', code: 'GET_STATE_ERROR' });
         }
     });
 
-    /**
-     * POST /aquarium/state?psid=<id>
-     * Updates aquarium state
-     */
     router.post('/state', validatePSID, async (req, res) => {
         try {
             const updates = req.body;
-            
-            // Validate request body
             if (!updates || typeof updates !== 'object') {
-                return res.status(400).json({
-                    success: false,
-                    error: 'Invalid request body',
-                    code: 'INVALID_BODY'
-                });
+                return res.status(400).json({ success: false, error: 'Invalid request body', code: 'INVALID_BODY' });
             }
-
-            const aquarium = await logic.updateAquariumState(req.psid, updates);
-            
-            res.json({
-                success: true,
-                data: aquarium,
-                timestamp: new Date().toISOString()
-            });
+            const aquarium = await logic.saveAquariumState(req.psid, updates);
+            res.json({ success: true, data: aquarium, timestamp: new Date().toISOString() });
         } catch (error) {
             logger.aquarium.error(req.psid, 'update_state_endpoint', error);
-            res.status(500).json({
-                success: false,
-                error: 'Failed to update aquarium state',
-                code: 'UPDATE_STATE_ERROR'
-            });
+            res.status(500).json({ success: false, error: 'Failed to update aquarium state', code: 'UPDATE_STATE_ERROR' });
         }
     });
 
-    /**
-     * GET /aquarium/config
-     * Returns fish configuration and game constants
-     */
     router.get('/config', (req, res) => {
         try {
             res.json({
@@ -490,44 +404,25 @@ function createAquariumRoutes(db) {
                     fishTypes: fishConfig.getAllFishTypes(),
                     rarityWeights: fishConfig.rarityWeights,
                     gameConstants: {
-                        foodTTL: 30000, // 30 seconds
-                        saveInterval: 5000, // 5 seconds
-                        hungerCheckInterval: 60000, // 1 minute
-                        maxHunger: 100,
-                        hungerMultiplier: parseFloat(process.env.HUNGER_MULTIPLIER) || 1.0,
+                        foodTTL: 30000, saveInterval: 5000, hungerCheckInterval: 60000,
+                        maxHunger: 100, hungerMultiplier: parseFloat(process.env.HUNGER_MULTIPLIER) || 1.0,
                         fishScaleMultiplier: parseFloat(process.env.FISH_SCALE_MULTIPLIER) || 1.5
                     }
                 }
             });
         } catch (error) {
             logger.error('Config endpoint error', { error: error.message });
-            res.status(500).json({
-                success: false,
-                error: 'Failed to retrieve configuration',
-                code: 'CONFIG_ERROR'
-            });
+            res.status(500).json({ success: false, error: 'Failed to retrieve configuration', code: 'CONFIG_ERROR' });
         }
     });
 
-    /**
-     * GET /aquarium/leaderboard
-     * Returns top 10 leaderboard entries
-     */
     router.get('/leaderboard', async (req, res) => {
         try {
             const leaderboardData = await db.getLeaderboard();
-            res.json({
-                success: true,
-                data: leaderboardData,
-                timestamp: new Date().toISOString()
-            });
+            res.json({ success: true, data: leaderboardData, timestamp: new Date().toISOString() });
         } catch (error) {
             logger.error('Leaderboard endpoint error', { error: error.message });
-            res.status(500).json({
-                success: false,
-                error: 'Failed to retrieve leaderboard data',
-                code: 'LEADERBOARD_ERROR'
-            });
+            res.status(500).json({ success: false, error: 'Failed to retrieve leaderboard data', code: 'LEADERBOARD_ERROR' });
         }
     });
 

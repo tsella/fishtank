@@ -280,7 +280,7 @@ canvas {
 .leaderboard-panel {
     top: 20px;
     right: 20px;
-    width: 300px;
+    width: 320px;
     max-height: calc(100vh - 160px);
     display: flex;
     flex-direction: column;
@@ -310,39 +310,25 @@ canvas {
     font-size: 0.85rem;
 }
 
-.leaderboard-entry:last-child {
-    border-bottom: none;
-}
-
-.leaderboard-entry.current-user {
-    background-color: rgba(59, 130, 246, 0.2);
-    border-left: 3px solid #3b82f6;
-    margin-left: -3px;
-    border-radius: 4px;
-}
-
 .leaderboard-rank {
     font-weight: bold;
     text-align: center;
     color: #f59e0b;
 }
 
-.leaderboard-name {
-    font-weight: 600;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+.leaderboard-details {
+    line-height: 1.4;
 }
 
-.leaderboard-score {
+.leaderboard-player {
+    font-size: 0.75rem;
+    opacity: 0.8;
+}
+
+.leaderboard-life {
+    font-weight: bold;
+    font-size: 0.9rem;
     text-align: right;
-    font-size: 0.8rem;
-    line-height: 1.3;
-}
-
-.leaderboard-score .score-label {
-    opacity: 0.7;
-    font-size: 0.7rem;
 }
 
 .leaderboard-loading, .leaderboard-empty {

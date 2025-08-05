@@ -38,6 +38,7 @@ class AquariumSystem {
         this.lastFrameTime = 0;
         this.frameCount = 0;
         this.fps = 60;
+        this.lastFpsTime = 0;
         
         // Debug features
         this.debugTimeOverride = null; // null = normal time, 'day' or 'night' = forced
@@ -61,15 +62,11 @@ class AquariumSystem {
      * Setup player session ID
      */
     setupPSID() {
-        // Try to get PSID from URL parameters
         const urlParams = new URLSearchParams(window.location.search);
         this.psid = urlParams.get('psid');
         
-        // Generate PSID if not provided
         if (!this.psid) {
             this.psid = 'player_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-            
-            // Update URL without reloading
             const newUrl = new URL(window.location);
             newUrl.searchParams.set('psid', this.psid);
             window.history.replaceState({}, '', newUrl);
@@ -110,7 +107,6 @@ class AquariumSystem {
             
             updateLoadingProgress(100, 'Ready!');
             
-            // Hide loading screen after short delay
             setTimeout(() => {
                 hideLoadingScreen();
                 this.startGame();
@@ -132,40 +128,20 @@ class AquariumSystem {
     async loadGameConfig() {
         try {
             const response = await fetch(`${this.serverUrl}/aquarium/config`);
-            
-            if (!response.ok) {
-                throw new Error(`Config request failed: ${response.status}`);
-            }
-            
+            if (!response.ok) throw new Error(`Config request failed: ${response.status}`);
             const configData = await response.json();
+            if (!configData.success) throw new Error('Server returned error: ' + configData.error);
             
-            if (!configData.success) {
-                throw new Error('Server returned error: ' + configData.error);
-            }
-            
-            // Initialize fish manager with fish types
             this.fishManager = initializeFishManager(configData.data.fishTypes);
-            
-            // Update game constants
             if (configData.data.gameConstants) {
                 this.updateGameConstants(configData.data.gameConstants);
             }
-            
             console.log('Game configuration loaded');
-            
         } catch (error) {
             console.warn('Failed to load server config, using defaults:', error);
-            
-            // Initialize with default fish types
             this.fishManager = initializeFishManager([
-                {
-                    name: 'Clownfish',
-                    feedIntervalMin: 5,
-                    hungerThreshold: 60,
-                    rarity: 'common',
-                    cycle: 'diurnal',
-                    size: { width: 30, height: 20 }
-                }
+                { name: 'Clownfish', feedIntervalMin: 5, hungerThreshold: 60,
+                  rarity: 'common', cycle: 'diurnal', size: { width: 30, height: 20 } }
             ]);
         }
     }
@@ -176,10 +152,8 @@ class AquariumSystem {
     async loadAquariumState() {
         try {
             const response = await fetch(`${this.serverUrl}/aquarium/state?psid=${this.psid}`);
-            
             if (!response.ok) {
                 if (response.status === 404) {
-                    // Create new aquarium
                     await this.createNewAquarium();
                     return;
                 }
@@ -187,48 +161,33 @@ class AquariumSystem {
             }
             
             const stateData = await response.json();
-            
-            if (!stateData.success) {
-                throw new Error('Server returned error: ' + stateData.error);
-            }
+            if (!stateData.success) throw new Error('Server returned error: ' + stateData.error);
             
             this.aquariumState = stateData.data;
             this.tankLifeSeconds = this.aquariumState.tank_life_sec || 0;
             
-            // Load fish into fish manager
+            if (this.foodManager && this.aquariumState.food_level !== undefined) {
+                this.foodManager.setFoodLevel(this.aquariumState.food_level);
+            }
+
             if (this.aquariumState.fish) {
-                this.aquariumState.fish.forEach(fishData => {
-                    this.fishManager.addFish(fishData);
-                });
+                this.aquariumState.fish.forEach(fishData => this.fishManager.addFish(fishData));
             }
             
-            // Update decorations
             this.decorations.castle.enabled = this.aquariumState.castle_unlocked || false;
             this.decorations.submarine.enabled = this.aquariumState.submarine_unlocked || false;
             
-            // Update controls
             this.controlsManager.updateFromServerState(this.aquariumState);
-            
             this.lastServerSync = Date.now();
             this.isOnline = true;
-            
             console.log('Aquarium state loaded:', this.aquariumState);
-            
         } catch (error) {
             console.warn('Failed to load aquarium state:', error);
             this.isOnline = false;
-            
-            // Create minimal state for offline mode
             this.aquariumState = {
-                id: 0,
-                psid: this.psid,
-                tank_life_sec: 0,
-                num_fish: 0,
-                total_feedings: 0,
-                castle_unlocked: false,
-                submarine_unlocked: false,
-                music_enabled: true,
-                fish: []
+                id: 0, psid: this.psid, tank_life_sec: 0, num_fish: 0, total_feedings: 0,
+                food_level: 50.0, castle_unlocked: false, submarine_unlocked: false,
+                music_enabled: true, fish: []
             };
         }
     }
@@ -240,28 +199,15 @@ class AquariumSystem {
         try {
             const response = await fetch(`${this.serverUrl}/aquarium/state?psid=${this.psid}`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    tank_life_sec: 0,
-                    fish: []
-                })
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ tank_life_sec: 0, fish: [] })
             });
-            
-            if (!response.ok) {
-                throw new Error(`Create aquarium failed: ${response.status}`);
-            }
-            
+            if (!response.ok) throw new Error(`Create aquarium failed: ${response.status}`);
             const stateData = await response.json();
-            
-            if (!stateData.success) {
-                throw new Error('Server returned error: ' + stateData.error);
-            }
+            if (!stateData.success) throw new Error('Server returned error: ' + stateData.error);
             
             this.aquariumState = stateData.data;
             console.log('New aquarium created');
-            
         } catch (error) {
             console.warn('Failed to create new aquarium:', error);
             throw error;
@@ -273,33 +219,18 @@ class AquariumSystem {
      */
     async setupGraphics() {
         return new Promise((resolve) => {
-            // p5.js sketch
             const sketch = (p5) => {
                 p5.setup = () => {
-                    // Create canvas with WEBGL renderer
                     this.canvas = p5.createCanvas(1920, 1080, p5.WEBGL);
                     this.canvas.parent('game-container');
-                    
-                    // Initialize environment effects
                     this.initializeEnvironment(p5);
-                    
                     console.log('Graphics initialized in WEBGL mode');
                     resolve();
                 };
-                
-                p5.draw = () => {
-                    this.renderFrame(p5);
-                };
-
-                p5.windowResized = () => {
-                    p5.resizeCanvas(p5.windowWidth, p5.windowHeight);
-                }
-                
-                // Store p5 instance
+                p5.draw = () => this.renderFrame(p5);
+                p5.windowResized = () => p5.resizeCanvas(p5.windowWidth, p5.windowHeight);
                 this.p5 = p5;
             };
-            
-            // Create p5 instance
             new p5(sketch);
         });
     }
@@ -309,24 +240,17 @@ class AquariumSystem {
      * @param {Object} p5 - p5.js instance
      */
     initializeEnvironment(p5) {
-        // Create bubbles
         for (let i = 0; i < 15; i++) {
             this.bubbles.push({
-                x: Math.random() * 1920,
-                y: Math.random() * 1080 + 1080, // Start below screen
-                size: 3 + Math.random() * 8,
-                speed: 20 + Math.random() * 30,
+                x: Math.random() * 1920, y: Math.random() * 1080 + 1080,
+                size: 3 + Math.random() * 8, speed: 20 + Math.random() * 30,
                 opacity: 100 + Math.random() * 155
             });
         }
-        
-        // Create seaweed
         for (let i = 0; i < 8; i++) {
             this.seaweed.push({
-                x: 100 + i * 200 + Math.random() * 100,
-                height: 100 + Math.random() * 150,
-                segments: 8 + Math.floor(Math.random() * 6),
-                swayOffset: Math.random() * 1000,
+                x: 100 + i * 200 + Math.random() * 100, height: 100 + Math.random() * 150,
+                segments: 8 + Math.floor(Math.random() * 6), swayOffset: Math.random() * 1000,
                 color: p5.color(34 + Math.random() * 30, 139 + Math.random() * 40, 34 + Math.random() * 30)
             });
         }
@@ -336,76 +260,34 @@ class AquariumSystem {
      * Setup control event callbacks
      */
     setupControlCallbacks() {
-        this.controlsManager.on('feed', (foodItem) => {
-            this.markForSave();
-        });
-        
+        this.controlsManager.on('feed', () => this.markForSave());
         this.controlsManager.on('castleToggle', (enabled) => {
             this.decorations.castle.enabled = enabled;
             this.markForSave();
         });
-        
         this.controlsManager.on('submarineToggle', (enabled) => {
             this.decorations.submarine.enabled = enabled;
             this.markForSave();
         });
-        
-        this.controlsManager.on('musicToggle', (enabled) => {
-            this.updateTimeOfDay();
-        });
-
-        this.controlsManager.on('leaderboardToggle', () => {
-            this.toggleLeaderboard();
-        });
-        
-        this.controlsManager.on('debugToggle', (visible) => {
-            if (visible) {
-                this.updateDebugPanel();
-            }
-        });
-
-        this.controlsManager.on('spawnFish', () => {
-            if (this.fishManager) {
-                this.fishManager.spawnRandomFish();
-            }
-        });
-
-        this.controlsManager.on('unlockCastle', () => {
-            this.controlsManager.setCastleUnlocked(true);
-            console.log('Debug: Castle unlocked');
-        });
-
-        this.controlsManager.on('unlockSubmarine', () => {
-            this.controlsManager.setSubmarineUnlocked(true);
-            console.log('Debug: Submarine unlocked');
-        });
+        this.controlsManager.on('musicToggle', () => this.updateTimeOfDay());
+        this.controlsManager.on('leaderboardToggle', () => this.toggleLeaderboard());
+        this.controlsManager.on('debugToggle', (visible) => { if (visible) this.updateDebugPanel(); });
+        this.controlsManager.on('spawnFish', () => this.fishManager?.spawnRandomFish());
+        this.controlsManager.on('unlockCastle', () => this.controlsManager.setCastleUnlocked(true));
+        this.controlsManager.on('unlockSubmarine', () => this.controlsManager.setSubmarineUnlocked(true));
     }
 
     /**
      * Setup game loop
      */
     setupGameLoop() {
-        // Auto-save interval
-        setInterval(() => {
-            if (this.shouldSaveToServer()) {
-                this.saveToServer();
-            }
-        }, this.saveInterval);
-        
-        // Time tracking
-        setInterval(() => {
-            this.tankLifeSeconds++;
-            this.updateTimeOfDay();
-            this.updateUI();
-        }, 1000);
-
-        // Leaderboard refresh interval
+        setInterval(() => { if (this.shouldSaveToServer()) this.saveToServer(); }, this.saveInterval);
+        setInterval(() => { this.tankLifeSeconds++; this.updateTimeOfDay(); this.updateUI(); }, 1000);
         setInterval(() => {
             if (this.leaderboardVisible && Date.now() - this.lastLeaderboardFetch > this.leaderboardFetchInterval) {
                 this.fetchLeaderboard();
             }
         }, this.leaderboardFetchInterval);
-        
         this.lastFrameTime = Date.now();
     }
 
@@ -425,34 +307,22 @@ class AquariumSystem {
      */
     renderFrame(p5) {
         if (!this.initialized) return;
-
         const now = Date.now();
         const deltaTime = now - this.lastFrameTime;
         this.lastFrameTime = now;
 
-        // Update systems
         this.update(deltaTime);
 
-        // --- 3D Scene Rendering ---
         p5.clear();
-        
         p5.ambientLight(150);
         p5.pointLight(255, 255, 255, p5.width/2, p5.height/2, 600);
-        
-        // Translate to use top-left coordinates for drawing 3D objects
         p5.translate(-p5.width / 2, -p5.height / 2, 0);
 
         this.renderWaterEffects(p5);
         this.renderSeaweed(p5);
         this.renderDecorations(p5);
-
-        if (this.fishManager) {
-            this.fishManager.renderAll(p5);
-        }
-        if (this.foodManager) {
-            this.foodManager.render(p5);
-        }
-
+        this.fishManager?.renderAll(p5);
+        this.foodManager?.render(p5);
         this.renderBubbles(p5);
         
         this.updatePerformance();
@@ -463,25 +333,24 @@ class AquariumSystem {
      * @param {number} deltaTime - Time elapsed in milliseconds
      */
     update(deltaTime) {
+        const fishCount = this.fishManager ? this.fishManager.getCount() : 0;
         if (this.foodManager) {
-            const fishCount = this.fishManager ? this.fishManager.getCount() : 0;
+            const oldFoodLevel = this.foodManager.getFoodLevel();
             this.foodManager.update(deltaTime, fishCount);
+            if (Math.abs(oldFoodLevel - this.foodManager.getFoodLevel()) > 0.1) {
+                this.markForSave();
+            }
         }
         
         if (this.fishManager && this.foodManager) {
             const foodItems = this.foodManager.getActiveFoodItems();
             this.fishManager.updateAll(deltaTime, foodItems);
-            
-            const fishNeedingUpdate = this.fishManager.getFishNeedingUpdate();
-            if (fishNeedingUpdate.length > 0) {
+            if (this.fishManager.getFishNeedingUpdate().length > 0) {
                 this.markForSave();
             }
         }
         
-        if (this.controlsManager) {
-            this.controlsManager.update(deltaTime);
-        }
-        
+        this.controlsManager?.update(deltaTime);
         this.updateBubbles(deltaTime);
         
         if (this.frameCount % 30 === 0) {
@@ -777,35 +646,23 @@ class AquariumSystem {
             this.lastFpsTime = now;
         }
     }
-
-    /**
-     * Mark aquarium for server save
-     */
-    markForSave() {
-        this.needsSave = true;
-    }
-
-    /**
-     * Check if aquarium should be saved to server
-     * @returns {boolean} Whether save is needed
-     */
+    
+    markForSave() { this.needsSave = true; }
     shouldSaveToServer() {
         const now = Date.now();
-        const timeSinceLastSave = now - this.lastSaveTime;
-        return this.needsSave && timeSinceLastSave >= this.saveInterval && this.isOnline;
+        return this.needsSave && (now - this.lastSaveTime) >= this.saveInterval && this.isOnline;
     }
 
     /**
      * Save aquarium state to server
      */
     async saveToServer() {
-        if (!this.isOnline || this.syncAttempts >= this.maxSyncAttempts) {
-            return;
-        }
+        if (!this.isOnline || this.syncAttempts >= this.maxSyncAttempts) return;
         
         try {
             const saveData = {
                 tank_life_sec: this.tankLifeSeconds,
+                food_level: this.foodManager ? this.foodManager.getFoodLevel() : 50,
                 fish: this.fishManager ? this.fishManager.getAllServerData() : [],
                 unlockables: {
                     castle: this.decorations.castle.enabled,
@@ -821,40 +678,34 @@ class AquariumSystem {
             });
             
             if (!response.ok) throw new Error(`Save failed: ${response.status}`);
-            
             const result = await response.json();
             if (!result.success) throw new Error('Server returned error: ' + result.error);
             
             const oldFishCount = this.fishManager ? this.fishManager.getCount() : 0;
-
             this.aquariumState = result.data;
 
-            // Resync the fishManager with the authoritative state from the server
             if (this.fishManager) {
                 this.fishManager.clearAll();
                 if (this.aquariumState.fish) {
-                    this.aquariumState.fish.forEach(fishData => {
-                        this.fishManager.addFish(fishData);
-                    });
+                    this.aquariumState.fish.forEach(fishData => this.fishManager.addFish(fishData));
                 }
             }
 
             const newFishCount = this.fishManager ? this.fishManager.getCount() : 0;
-
-            // Play spawn sound if a fish was added
-            if (newFishCount > oldFishCount) {
-                window.getAudioManager?.().playEffect('spawn', 0.7);
-            }
+            if (newFishCount > oldFishCount) window.getAudioManager?.().playEffect('spawn', 0.7);
             
             this.lastSaveTime = Date.now();
             this.lastServerSync = Date.now();
             this.needsSave = false;
             this.syncAttempts = 0;
             this.isOnline = true;
-            console.log('Aquarium state saved successfully, fish count:', newFishCount);
-
+            console.log('Aquarium state saved successfully.');
             this.updateUI();
-            
+
+            if (this.leaderboardVisible) {
+                this.fetchLeaderboard();
+            }
+
         } catch (error) {
             console.warn('Failed to save aquarium state:', error);
             this.syncAttempts++;
@@ -865,10 +716,6 @@ class AquariumSystem {
         }
     }
 
-    /**
-     * Get current aquarium statistics
-     * @returns {Object} Aquarium statistics
-     */
     getStats() {
         return {
             tankLifeSeconds: this.tankLifeSeconds,
@@ -881,10 +728,6 @@ class AquariumSystem {
         };
     }
 
-    /**
-     * Update game constants from server config
-     * @param {Object} constants - Game constants
-     */
     updateGameConstants(constants) {
         if (constants.foodTTL && this.foodManager) {
             this.foodManager.updateSettings({ foodTTL: constants.foodTTL });
@@ -898,19 +741,13 @@ class AquariumSystem {
         }
     }
 
-    /**
-     * Handle window resize
-     */
     handleResize() {
         if (this.p5 && this.canvas) {
             this.p5.resizeCanvas(window.innerWidth, window.innerHeight);
         }
     }
 
-    /**
-     * Respawn a fish when tank is empty
-     */
-    async respawnFish() {
+    respawnFish() {
         try {
             console.log('No fish detected - respawning starter fish');
             const fishTypes = this.fishManager.fishTypes;
@@ -924,13 +761,9 @@ class AquariumSystem {
             const starterFishType = commonFish.length > 0 ? commonFish[0] : availableTypes[0];
             
             const newFishData = {
-                id: Date.now(),
-                type: starterFishType.name,
-                hunger: 0,
-                x: 400 + Math.random() * 1120,
-                y: 400 + Math.random() * 400,
-                last_fed: new Date().toISOString(),
-                spawn_count: 0
+                id: Date.now(), type: starterFishType.name, hunger: 0,
+                x: 400 + Math.random() * 1120, y: 400 + Math.random() * 400,
+                last_fed: new Date().toISOString(), spawn_count: 0
             };
             
             const fish = this.fishManager.addFish(newFishData);
@@ -945,9 +778,6 @@ class AquariumSystem {
         }
     }
 
-    /**
-     * Setup leaderboard UI elements and event listeners
-     */
     setupLeaderboard() {
         const toggleBtn = document.getElementById('leaderboard-toggle-btn');
         const closeBtn = document.getElementById('leaderboard-close-btn');
@@ -959,7 +789,7 @@ class AquariumSystem {
             closeBtn.addEventListener('click', () => this.toggleLeaderboard(false));
         }
     }
-
+    
     /**
      * Fetch leaderboard data from server
      */
@@ -967,9 +797,7 @@ class AquariumSystem {
         this.lastLeaderboardFetch = Date.now();
         try {
             const response = await fetch(`${this.serverUrl}/aquarium/leaderboard`);
-            if (!response.ok) {
-                throw new Error(`Leaderboard request failed: ${response.status}`);
-            }
+            if (!response.ok) throw new Error(`Leaderboard request failed: ${response.status}`);
             const result = await response.json();
             if (result.success) {
                 this.leaderboardData = result.data;
@@ -989,37 +817,51 @@ class AquariumSystem {
         const contentEl = document.getElementById('leaderboard-content');
         if (!contentEl) return;
 
-        if (!this.leaderboardData || this.leaderboardData.length === 0) {
-            contentEl.innerHTML = '<div class="leaderboard-empty">No scores yet. Be the first!</div>';
-            return;
-        }
+        try {
+            if (!this.leaderboardData || this.leaderboardData.length === 0) {
+                contentEl.innerHTML = '<div class="leaderboard-empty">No scores yet. Be the first!</div>';
+                return;
+            }
 
-        const html = this.leaderboardData.map((entry, index) => {
-            const name = `...${entry.psid.slice(-5)}`;
-            const tankLifeHours = Math.floor(entry.tank_life_sec / 3600);
-            const tankLifeMinutes = Math.floor((entry.tank_life_sec % 3600) / 60);
-            const isCurrentUser = entry.psid === this.psid;
+            const html = this.leaderboardData.map((entry, index) => {
+                if (!entry || !entry.psid || !entry.created_at) {
+                    console.warn('Malformed leaderboard entry:', entry);
+                    return ''; // Skip malformed entries
+                }
+                
+                // **BUG FIX**: Make date parsing robust for different browser implementations.
+                const dateString = (entry.created_at || '').replace(' ', 'T') + 'Z';
+                const lifeSeconds = (Date.now() - new Date(dateString).getTime()) / 1000;
+                
+                if (isNaN(lifeSeconds) || lifeSeconds < 0) {
+                    console.warn('Invalid life calculation for leaderboard entry:', entry);
+                    return ''; // Skip entries with invalid dates
+                }
 
-            return `
-                <div class="leaderboard-entry ${isCurrentUser ? 'current-user' : ''}">
-                    <div class="leaderboard-rank">${index + 1}</div>
-                    <div class="leaderboard-name" title="${entry.psid}">${name}</div>
-                    <div class="leaderboard-score">
-                        <div>${tankLifeHours}h ${tankLifeMinutes}m <span class="score-label">life</span></div>
-                        <div>${entry.num_fish} <span class="score-label">fish</span></div>
-                        <div>${entry.total_feedings} <span class="score-label">feeds</span></div>
+                const days = Math.floor(lifeSeconds / 86400);
+                const hours = Math.floor((lifeSeconds % 86400) / 3600);
+                const minutes = Math.floor((lifeSeconds % 3600) / 60);
+                const lifeFormatted = `${days}d ${hours}h ${minutes}m`;
+
+                return `
+                    <div class="leaderboard-entry">
+                        <div class="leaderboard-rank">${index + 1}</div>
+                        <div class="leaderboard-details">
+                            <div><strong>${entry.fish_type || 'Unknown Fish'}</strong> (ID: ${entry.fish_id || 'N/A'})</div>
+                            <div class="leaderboard-player">Player: ...${entry.psid.slice(-5)}</div>
+                        </div>
+                        <div class="leaderboard-life">${lifeFormatted}</div>
                     </div>
-                </div>
-            `;
-        }).join('');
+                `;
+            }).join('');
 
-        contentEl.innerHTML = html;
+            contentEl.innerHTML = html;
+        } catch (error) {
+            console.error("Error rendering leaderboard:", error);
+            contentEl.innerHTML = '<div class="leaderboard-empty">Error displaying scores.</div>';
+        }
     }
-
-    /**
-     * Toggle leaderboard visibility
-     * @param {boolean} [forceState] - Optional state to force (true=visible, false=hidden)
-     */
+    
     toggleLeaderboard(forceState) {
         this.leaderboardVisible = forceState !== undefined ? forceState : !this.leaderboardVisible;
         const panel = document.getElementById('leaderboard-panel');
@@ -1039,9 +881,6 @@ class AquariumSystem {
         }
     }
 
-    /**
-     * Cleanup and destroy aquarium
-     */
     destroy() {
         if (this.isOnline) this.saveToServer();
         if (this.audioManager) this.audioManager.destroy();
@@ -1051,49 +890,15 @@ class AquariumSystem {
     }
 }
 
-// Global aquarium instance
+// Global aquarium instance and helpers
 let aquariumSystem = null;
-
-/**
- * Initialize the aquarium system
- * @returns {Promise<boolean>} Success status
- */
-async function initializeAquarium() {
-    if (aquariumSystem) {
-        return true;
-    }
-    
+function initializeAquarium() {
+    if (aquariumSystem) return true;
     aquariumSystem = new AquariumSystem();
-    return await aquariumSystem.initialize();
+    return aquariumSystem.initialize();
 }
-
-/**
- * Get the global aquarium system
- * @returns {AquariumSystem|null} Aquarium system instance
- */
-function getAquariumSystem() {
-    return aquariumSystem;
-}
-
-// Handle page unload
-window.addEventListener('beforeunload', () => {
-    if (aquariumSystem) {
-        aquariumSystem.destroy();
-    }
-});
-
-// Handle window resize
-window.addEventListener('resize', () => {
-    if (aquariumSystem) {
-        aquariumSystem.handleResize();
-    }
-});
-
-// Export for module systems and global access
-if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { AquariumSystem, initializeAquarium, getAquariumSystem };
-} else {
-    window.AquariumSystem = AquariumSystem;
-    window.initializeAquarium = initializeAquarium;
-    window.getAquariumSystem = getAquariumSystem;
-}
+function getAquariumSystem() { return aquariumSystem; }
+window.addEventListener('beforeunload', () => aquariumSystem?.destroy());
+window.addEventListener('resize', () => aquariumSystem?.handleResize());
+window.initializeAquarium = initializeAquarium;
+window.getAquariumSystem = getAquariumSystem;

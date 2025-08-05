@@ -28,9 +28,10 @@ async function setupDatabase(dbPath = process.env.DB_PATH || './aquae.db') {
             `CREATE TABLE IF NOT EXISTS aquariums (
                 id INTEGER PRIMARY KEY AUTOINCREMENT, psid TEXT NOT NULL UNIQUE,
                 tank_life_sec INTEGER NOT NULL DEFAULT 0, num_fish INTEGER NOT NULL DEFAULT 0,
-                total_feedings INTEGER NOT NULL DEFAULT 0, castle_unlocked BOOLEAN DEFAULT FALSE,
-                submarine_unlocked BOOLEAN DEFAULT FALSE, music_enabled BOOLEAN DEFAULT TRUE,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                total_feedings INTEGER NOT NULL DEFAULT 0, food_level REAL NOT NULL DEFAULT 50.0,
+                castle_unlocked BOOLEAN DEFAULT FALSE, submarine_unlocked BOOLEAN DEFAULT FALSE, 
+                music_enabled BOOLEAN DEFAULT TRUE, created_at DATETIME DEFAULT CURRENT_TIMESTAMP, 
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
             )`,
             `CREATE TABLE IF NOT EXISTS fish (
                 id INTEGER PRIMARY KEY AUTOINCREMENT, aquarium_id INTEGER NOT NULL, type TEXT NOT NULL,
@@ -40,12 +41,15 @@ async function setupDatabase(dbPath = process.env.DB_PATH || './aquae.db') {
                 FOREIGN KEY (aquarium_id) REFERENCES aquariums (id) ON DELETE CASCADE
             )`,
             `CREATE TABLE IF NOT EXISTS leaderboard (
-                psid TEXT PRIMARY KEY, tank_life_sec INTEGER NOT NULL, num_fish INTEGER NOT NULL,
-                total_feedings INTEGER NOT NULL, updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                fish_id INTEGER PRIMARY KEY,
+                aquarium_id INTEGER NOT NULL,
+                psid TEXT NOT NULL,
+                fish_type TEXT NOT NULL,
+                created_at DATETIME NOT NULL
             )`,
             'CREATE INDEX IF NOT EXISTS idx_aquariums_psid ON aquariums(psid)',
             'CREATE INDEX IF NOT EXISTS idx_fish_aquarium_id ON fish(aquarium_id)',
-            'CREATE INDEX IF NOT EXISTS idx_leaderboard_tank_life ON leaderboard(tank_life_sec DESC)'
+            'CREATE INDEX IF NOT EXISTS idx_leaderboard_created_at ON leaderboard(created_at ASC)'
         ];
 
         db.serialize(() => {
@@ -74,7 +78,7 @@ class SqliteDB {
     async getAquarium(psid) {
         return new Promise((resolve, reject) => {
             const query = `
-                SELECT a.*, f.id as fish_id, f.type, f.hunger, f.x, f.y, f.last_fed, f.spawn_count
+                SELECT a.*, f.id as fish_id, f.type, f.hunger, f.x, f.y, f.last_fed, f.spawn_count, f.created_at as fish_created_at, f.aquarium_id
                 FROM aquariums a LEFT JOIN fish f ON a.id = f.aquarium_id
                 WHERE a.psid = ? ORDER BY f.id
             `;
@@ -85,6 +89,7 @@ class SqliteDB {
                 const aquarium = {
                     id: rows[0].id, psid: rows[0].psid, tank_life_sec: rows[0].tank_life_sec,
                     num_fish: rows[0].num_fish, total_feedings: rows[0].total_feedings || 0,
+                    food_level: rows[0].food_level,
                     castle_unlocked: Boolean(rows[0].castle_unlocked),
                     submarine_unlocked: Boolean(rows[0].submarine_unlocked),
                     music_enabled: Boolean(rows[0].music_enabled), fish: []
@@ -92,7 +97,8 @@ class SqliteDB {
                 rows.forEach(row => {
                     if (row.fish_id) aquarium.fish.push({
                         id: row.fish_id, type: row.type, hunger: row.hunger, x: row.x, y: row.y,
-                        last_fed: row.last_fed, spawn_count: row.spawn_count
+                        last_fed: row.last_fed, spawn_count: row.spawn_count, created_at: row.fish_created_at,
+                        aquarium_id: row.aquarium_id
                     });
                 });
                 resolve(aquarium);
@@ -107,7 +113,8 @@ class SqliteDB {
                 if (err) return reject(err);
                 resolve({
                     id: this.lastID, psid, tank_life_sec: 0, num_fish: 0, total_feedings: 0,
-                    castle_unlocked: false, submarine_unlocked: false, music_enabled: true, fish: []
+                    food_level: 50.0, castle_unlocked: false, submarine_unlocked: false, 
+                    music_enabled: true, fish: []
                 });
             });
         });
@@ -125,12 +132,23 @@ class SqliteDB {
 
     async addFish(aquariumId, fishData) {
         return new Promise((resolve, reject) => {
-            const query = `INSERT INTO fish (aquarium_id, type, hunger, x, y, last_fed, spawn_count) VALUES (?, ?, ?, ?, ?, ?, ?)`;
+            const insertQuery = `INSERT INTO fish (aquarium_id, type, hunger, x, y, last_fed, spawn_count) VALUES (?, ?, ?, ?, ?, ?, ?)`;
             const values = [
                 aquariumId, fishData.type, fishData.hunger || 0, fishData.x || 400,
                 fishData.y || 300, fishData.last_fed || new Date().toISOString(), fishData.spawn_count || 0
             ];
-            this.db.run(query, values, function(err) { err ? reject(err) : resolve(this.lastID); });
+            
+            const db = this.db;
+            
+            db.run(insertQuery, values, function(err) {
+                if (err) return reject(err);
+                const fishId = this.lastID;
+                const selectQuery = `SELECT * FROM fish WHERE id = ?`;
+                db.get(selectQuery, [fishId], (err, row) => {
+                    if (err) return reject(err);
+                    resolve(row);
+                });
+            });
         });
     }
 
@@ -146,32 +164,38 @@ class SqliteDB {
 
     async removeFish(fishId) {
         return new Promise((resolve, reject) => {
-            this.db.run('DELETE FROM fish WHERE id = ?', [fishId], (err) => err ? reject(err) : resolve());
+            this.db.run('DELETE FROM fish WHERE id = ?', [fishId], (err) => {
+                if (err) return reject(err);
+                this.db.run('DELETE FROM leaderboard WHERE fish_id = ?', [fishId], (err) => {
+                    err ? reject(err) : resolve();
+                });
+            });
         });
     }
 
     async getLeaderboard() {
         return new Promise((resolve, reject) => {
-            const query = `SELECT psid, tank_life_sec, num_fish, total_feedings FROM leaderboard ORDER BY tank_life_sec DESC LIMIT 10`;
+            const query = `SELECT fish_id, psid, fish_type, created_at FROM leaderboard ORDER BY created_at ASC LIMIT 10`;
             this.db.all(query, [], (err, rows) => err ? reject(err) : resolve(rows));
         });
     }
 
-    async updateLeaderboard(psid, tank_life_sec, num_fish, total_feedings) {
+    async updateLeaderboard(fish, psid) {
         return new Promise((resolve, reject) => {
+            if (!fish || !fish.id || !fish.aquarium_id || !fish.type || !fish.created_at) {
+                logger.warn('Attempted to update leaderboard with invalid fish data.', { fish, psid });
+                return resolve();
+            }
+
             this.db.serialize(() => {
                 const upsertQuery = `
-                    INSERT INTO leaderboard (psid, tank_life_sec, num_fish, total_feedings, updated_at)
-                    VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
-                    ON CONFLICT(psid) DO UPDATE SET
-                        tank_life_sec = excluded.tank_life_sec,
-                        num_fish = excluded.num_fish,
-                        total_feedings = excluded.total_feedings,
-                        updated_at = excluded.updated_at
+                    INSERT INTO leaderboard (fish_id, aquarium_id, psid, fish_type, created_at)
+                    VALUES (?, ?, ?, ?, ?)
+                    ON CONFLICT(fish_id) DO NOTHING
                 `;
-                this.db.run(upsertQuery, [psid, tank_life_sec, num_fish, total_feedings], (err) => {
+                this.db.run(upsertQuery, [fish.id, fish.aquarium_id, psid, fish.type, fish.created_at], (err) => {
                     if (err) return reject(err);
-                    const trimQuery = `DELETE FROM leaderboard WHERE psid NOT IN (SELECT psid FROM leaderboard ORDER BY tank_life_sec DESC LIMIT 10)`;
+                    const trimQuery = `DELETE FROM leaderboard WHERE fish_id NOT IN (SELECT fish_id FROM leaderboard ORDER BY created_at ASC LIMIT 10)`;
                     this.db.run(trimQuery, (err) => err ? reject(err) : resolve());
                 });
             });

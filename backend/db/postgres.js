@@ -39,6 +39,7 @@ async function setupDatabase() {
             tank_life_sec INTEGER NOT NULL DEFAULT 0,
             num_fish INTEGER NOT NULL DEFAULT 0,
             total_feedings INTEGER NOT NULL DEFAULT 0,
+            food_level REAL NOT NULL DEFAULT 50.0,
             castle_unlocked BOOLEAN DEFAULT FALSE,
             submarine_unlocked BOOLEAN DEFAULT FALSE,
             music_enabled BOOLEAN DEFAULT TRUE,
@@ -65,11 +66,11 @@ async function setupDatabase() {
     // Create leaderboard table
     const createLeaderboardTable = `
         CREATE TABLE IF NOT EXISTS leaderboard (
-            psid VARCHAR(255) PRIMARY KEY,
-            tank_life_sec INTEGER NOT NULL,
-            num_fish INTEGER NOT NULL,
-            total_feedings INTEGER NOT NULL,
-            updated_at TIMESTAMPTZ DEFAULT NOW()
+            fish_id INTEGER PRIMARY KEY,
+            aquarium_id INTEGER NOT NULL,
+            psid VARCHAR(255) NOT NULL,
+            fish_type VARCHAR(255) NOT NULL,
+            created_at TIMESTAMPTZ NOT NULL
         )
     `;
 
@@ -77,7 +78,7 @@ async function setupDatabase() {
     const createIndexes = [
         'CREATE INDEX IF NOT EXISTS idx_aquariums_psid ON aquariums(psid)',
         'CREATE INDEX IF NOT EXISTS idx_fish_aquarium_id ON fish(aquarium_id)',
-        'CREATE INDEX IF NOT EXISTS idx_leaderboard_tank_life ON leaderboard(tank_life_sec DESC)'
+        'CREATE INDEX IF NOT EXISTS idx_leaderboard_created_at ON leaderboard(created_at ASC)'
     ];
 
     const client = await pool.connect();
@@ -110,7 +111,7 @@ class PostgresDB {
         const query = `
             SELECT a.*, 
                    f.id as fish_id, f.type, f.hunger, f.x, f.y, 
-                   f.last_fed, f.spawn_count
+                   f.last_fed, f.spawn_count, f.created_at as fish_created_at, f.aquarium_id
             FROM aquariums a
             LEFT JOIN fish f ON a.id = f.aquarium_id
             WHERE a.psid = $1
@@ -125,6 +126,7 @@ class PostgresDB {
             tank_life_sec: rows[0].tank_life_sec,
             num_fish: rows[0].num_fish,
             total_feedings: rows[0].total_feedings || 0,
+            food_level: rows[0].food_level,
             castle_unlocked: Boolean(rows[0].castle_unlocked),
             submarine_unlocked: Boolean(rows[0].submarine_unlocked),
             music_enabled: Boolean(rows[0].music_enabled),
@@ -140,7 +142,9 @@ class PostgresDB {
                     x: row.x,
                     y: row.y,
                     last_fed: row.last_fed,
-                    spawn_count: row.spawn_count
+                    spawn_count: row.spawn_count,
+                    created_at: row.fish_created_at,
+                    aquarium_id: row.aquarium_id
                 });
             }
         });
@@ -156,7 +160,8 @@ class PostgresDB {
         const { rows } = await this.pool.query(query, [psid]);
         return {
             id: rows[0].id, psid, tank_life_sec: 0, num_fish: 0, total_feedings: 0,
-            castle_unlocked: false, submarine_unlocked: false, music_enabled: true, fish: []
+            food_level: 50.0, castle_unlocked: false, submarine_unlocked: false, 
+            music_enabled: true, fish: []
         };
     }
 
@@ -177,14 +182,14 @@ class PostgresDB {
         const query = `
             INSERT INTO fish (aquarium_id, type, hunger, x, y, last_fed, spawn_count)
             VALUES ($1, $2, $3, $4, $5, $6, $7)
-            RETURNING id
+            RETURNING *
         `;
         const values = [
             aquariumId, fishData.type, fishData.hunger || 0, fishData.x || 400,
             fishData.y || 300, fishData.last_fed || new Date(), fishData.spawn_count || 0
         ];
         const { rows } = await this.pool.query(query, values);
-        return rows[0].id;
+        return rows[0];
     }
 
     async updateFish(fishId, updates) {
@@ -197,37 +202,33 @@ class PostgresDB {
 
     async removeFish(fishId) {
         await this.pool.query('DELETE FROM fish WHERE id = $1', [fishId]);
+        await this.pool.query('DELETE FROM leaderboard WHERE fish_id = $1', [fishId]);
     }
 
     async getLeaderboard() {
         const query = `
-            SELECT psid, tank_life_sec, num_fish, total_feedings
-            FROM leaderboard ORDER BY tank_life_sec DESC LIMIT 10
+            SELECT fish_id, psid, fish_type, created_at FROM leaderboard ORDER BY created_at ASC LIMIT 10
         `;
         const { rows } = await this.pool.query(query);
         return rows;
     }
 
-    async updateLeaderboard(psid, tank_life_sec, num_fish, total_feedings) {
+    async updateLeaderboard(fish, psid) {
         const upsertQuery = `
-            INSERT INTO leaderboard (psid, tank_life_sec, num_fish, total_feedings, updated_at)
-            VALUES ($1, $2, $3, $4, NOW())
-            ON CONFLICT(psid) DO UPDATE SET
-                tank_life_sec = EXCLUDED.tank_life_sec,
-                num_fish = EXCLUDED.num_fish,
-                total_feedings = EXCLUDED.total_feedings,
-                updated_at = NOW()
+            INSERT INTO leaderboard (fish_id, aquarium_id, psid, fish_type, created_at)
+            VALUES ($1, $2, $3, $4, $5)
+            ON CONFLICT(fish_id) DO NOTHING
         `;
         const trimQuery = `
             DELETE FROM leaderboard
-            WHERE psid NOT IN (
-                SELECT psid FROM leaderboard ORDER BY tank_life_sec DESC LIMIT 10
+            WHERE fish_id NOT IN (
+                SELECT fish_id FROM leaderboard ORDER BY created_at ASC LIMIT 10
             )
         `;
         const client = await this.pool.connect();
         try {
             await client.query('BEGIN');
-            await client.query(upsertQuery, [psid, tank_life_sec, num_fish, total_feedings]);
+            await client.query(upsertQuery, [fish.id, fish.aquarium_id, psid, fish.type, fish.created_at]);
             await client.query(trimQuery);
             await client.query('COMMIT');
         } catch (e) {
